@@ -30,6 +30,7 @@ char usage[] = "./centrifuger [OPTIONS] > output.tsv:\n"
   "\t-k INT: report upto <int> distinct, primary assignments for each read pair [1]\n"
   "\t--un STR: output unclassified reads to files with the prefix of <str>\n"
   "\t--cl STR: output classified reads to files with the prefix of <str>\n"
+  "\t--tid STR: the related taxonomy id (for association) file path <str>\n"
   "\t--barcode STR: path to the barcode file\n"
   "\t--UMI STR: path to the UMI file\n"
   "\t--read-format STR: format for read, barcode and UMI files, e.g. r1:0:-1,r2:0:-1,bc:0:15,um:16:-1 for paired-end files with barcode and UMI\n"
@@ -45,6 +46,7 @@ static const char *short_options = "x:1:2:u:i:o:t:k:v" ;
 static struct option long_options[] = {
   { "un", required_argument, 0, ARGV_OUTPUT_UNCLASSIFIED},
   { "cl", required_argument, 0, ARGV_OUTPUT_CLASSIFIED},
+  { "tid", required_argument, 0, ARGV_RELATED_TID},
   { "min-hitlen", required_argument, 0, ARGV_MIN_HITLEN},
   { "hitk-factor", required_argument, 0, ARGV_MAX_RESULT_PER_HIT_FACTOR},
   { "merge-readpair", no_argument, 0, ARGV_MERGE_READ_PAIR },
@@ -295,6 +297,7 @@ int main(int argc, char *argv[])
 
   char unclassifiedOutputPrefix[1024] = "";
   char classifiedOutputPrefix[1024] = "";
+  char relatedSpeciesTaxId[1024] = "";
   
   // variables regarding barcode, UMI
   ReadFiles barcodeFile ;
@@ -400,6 +403,10 @@ int main(int argc, char *argv[])
     {
       strcpy(classifiedOutputPrefix, optarg) ;
     }
+    else if (c == ARGV_RELATED_TID)
+    {
+      strcpy(relatedSpeciesTaxId, optarg) ;
+    }
     else
     {
       Utils::PrintLog("Unknown parameter found.\n%s", usage ) ;
@@ -449,8 +456,8 @@ int main(int argc, char *argv[])
   if (threadCnt > 1 && readFormatter.GetSegmentCount(FORMAT_CATEGORY_COUNT) > 0)
     readFormatter.AllocateBuffers(4 * threadCnt) ;
 
-  classifier.Init(idxPrefix, classifierParam) ;
-  
+  classifier.Init(idxPrefix, relatedSpeciesTaxId, classifierParam) ;
+
   resWriter.SetHasBarcode(hasBarcode) ;
   resWriter.SetHasUmi(hasUmi) ;
   if (unclassifiedOutputPrefix[0] != '\0')

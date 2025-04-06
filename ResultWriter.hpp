@@ -137,7 +137,7 @@ public:
 
   void OutputHeader()
   {
-    fprintf(_fpClassification, "readID\tseqID\ttaxID\tscore\t2ndBestScore\thitLength\tqueryLength\tnumMatches") ;
+    fprintf(_fpClassification, "readID\tseqID\ttaxID\trelatedTaxID\tscore\t2ndBestScore\thitLength\tqueryLength\tnumMatches") ;
   
     if (_hasBarcode)
       fprintf(_fpClassification, "\tbarcode") ;
@@ -159,8 +159,8 @@ public:
       for (i = 0 ; i < matchCnt ; ++i)
       {
         fprintf(_fpClassification,
-            "%s\t%s\t%lu\t%lu\t%lu\t%d\t%d\t%d",
-            readid, r.seqStrNames[i].c_str(), r.taxIds[i],
+            "%s\t%s\t%lu\t%lu\t%lu\t%lu\t%d\t%d\t%d",
+            readid, r.seqStrNames[i].c_str(), r.taxIds[i], r.relatedTaxId,
             r.score, r.secondaryScore, r.hitLength, r.queryLength, matchCnt) ;
         if (_hasBarcode)
           PrintExtraCol(barcode) ;

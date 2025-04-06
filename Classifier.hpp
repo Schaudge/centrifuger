@@ -17,12 +17,14 @@ struct _classifierParam
 {
   int maxResult ; // the number of entries in the results    
   int minHitLen ;
-  int maxResultPerHitFactor ; // Get the SA/tax id for at most maxREsultPerHitsFactor * maxResult entries for each hit 
+  int maxResultPerHitFactor ; // Get the SA/tax id for at most maxREsultPerHitsFactor * maxResult entries for each hit
+  std::map<size_t, int> relatedTaxId ;
   _classifierParam()
   {
     maxResult = 1 ;
     minHitLen = 0 ;
     maxResultPerHitFactor = 40 ;
+    relatedTaxId.clear() ;
   }
 } ;
 
@@ -31,6 +33,7 @@ struct _classifierResult
 {
   size_t score ;
   size_t secondaryScore ;
+  size_t relatedTaxId ;
   int hitLength ;
   int queryLength ;
   std::vector<std::string> seqStrNames ; // sequence names 
@@ -38,7 +41,7 @@ struct _classifierResult
 
   void Clear()
   {
-    score = secondaryScore = 0 ;
+    score = secondaryScore = relatedTaxId = 0 ;
     hitLength = queryLength = 0 ;
     seqStrNames.clear() ;
     taxIds.clear() ;
@@ -408,7 +411,7 @@ private:
     }
 
     // The hit seqId need to consider the strand separately.
-    //   Because sometimes a read can hit both the plus and minus strand and will artifically double the hit length.
+    //   Because sometimes a read can hit both the plus and minus strand and will artificially double the hit length.
     for (i = 0 ; i < hitCnt ; ++i)
     {
       if (hits[i].l < _param.minHitLen)
@@ -468,8 +471,7 @@ private:
       }
 
       // Update the scores for each seqid
-      for (std::map<size_t, int>::iterator iter = localSeqIdHit.begin() ;
-          iter != localSeqIdHit.end() ; ++iter)
+      for (auto iter = localSeqIdHit.begin(); iter != localSeqIdHit.end() ; ++iter)
       {
         size_t seqId = iter->first ;
         if (!mixStrand && i > 0 && hits[i].ep == hits[i].sp && 
@@ -534,16 +536,31 @@ private:
 
     // Collect match corresponding to the best score.
     result.score = bestScore ;
+    result.relatedTaxId = 0;
     result.secondaryScore = secondBestScore ;
     result.hitLength = bestScoreHitLength ;
 
     SimpleVector<size_t> bestSeqIds ;
     std::map<size_t, int> bestSeqIdUsed ;
+    uint64_t taxId{0}, improvedCnt{0};
     for (k = 0 ; k <= 1 ; ++k)
     {
       for (std::map<size_t, struct _seqHitRecord>::iterator iter = seqIdStrandHitRecord[k].begin() ; 
           iter != seqIdStrandHitRecord[k].end() ; ++iter)
       {
+        // Was any top taxonomy id in related validation species taxonomy id, added by Schaudge King
+        if (!_param.relatedTaxId.empty() && taxId == 0) {
+            taxId = _taxonomy.SeqIdToTaxId(iter->first);
+            while (improvedCnt < 3 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
+                taxId = _taxonomy.GetParentTid(taxId);
+                ++improvedCnt;
+            }
+            taxId = _taxonomy.GetOrigTaxId(taxId);
+            if (_param.relatedTaxId.find(taxId) != _param.relatedTaxId.end()) {
+                result.relatedTaxId = taxId;
+            }
+        }
+
         if (iter->second.score == bestScore && 
             bestSeqIdUsed.find(iter->first) == bestSeqIdUsed.end())
         {
@@ -612,7 +629,7 @@ public:
     _seqLength.clear() ;
   }
 
-  void Init(char *idxPrefix, struct _classifierParam param)
+  void Init(char *idxPrefix, char *relatedTaxPath, struct _classifierParam param)
   {
     FILE *fp ;
     char *nameBuffer = (char *)malloc(sizeof(char) * (strlen(idxPrefix) + 17))  ;  
@@ -640,7 +657,21 @@ public:
     fclose(fp) ;
     
     Utils::PrintLog("Finishes loading index.") ;
-    
+
+    if (relatedTaxPath[0] != '\0') // read related species level taxonomy id from configuration
+    {
+        std::ifstream sidHandler(relatedTaxPath);
+        if (!sidHandler.is_open()) {
+            std::cerr << "Failed to open the related taxonomy id file!" << std::endl;
+        } else {
+            unsigned long line;
+            while (sidHandler >> line)
+                param.relatedTaxId[line] = 1;
+            sidHandler.close();
+            Utils::PrintLog("Finishes loading related species taxonomy id list.") ;
+        }
+    }
+
     _param = param ;
     if (_param.minHitLen <= 0)
     {

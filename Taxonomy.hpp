@@ -129,7 +129,7 @@ private:
     _taxRankNum[RANK_UNKNOWN] = rank;
   }
   
-  void ReadTaxonomyTree(std::string taxonomy_fname, std::map<uint64_t, int> &presentTax) 
+  void ReadTaxonomyTree(const std::string& taxonomy_fname, std::map<uint64_t, int> &presentTax)
   {
     std::ifstream taxonomy_file(taxonomy_fname.c_str(), std::ios::in);
     std::map<uint64_t, struct TaxonomyNode> tree ;
@@ -668,7 +668,7 @@ public:
  
   // Directly add a seqId(string)
   // @return: id ;
-  size_t AddExtraSeqName(char *s)
+  size_t AddExtraSeqName(const char *s)
   {
     size_t ret = _seqStrNameMap.Add(s) ;
     ++_extraSeqCnt ;
