@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS= -Wall -g -O3 -msse4.2 #-pg -g #-Wall #-O3
+CXXFLAGS= -Wall -std=c++11 -O3 -msse4.2 #-pg -g #-Wall #-O3
 LINKPATH=
 LINKFLAGS = -lpthread -lz 
 DEBUG=

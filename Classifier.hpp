@@ -549,9 +549,9 @@ private:
           iter != seqIdStrandHitRecord[k].end() ; ++iter)
       {
         // Was any top taxonomy id in related validation species taxonomy id, added by Schaudge King
-        if (!_param.relatedTaxId.empty() && taxId == 0) {
+        if (!_param.relatedTaxId.empty() && taxId == 0 && iter->second.hitLength * 1.7 >= result.queryLength) {
             taxId = _taxonomy.SeqIdToTaxId(iter->first);
-            while (improvedCnt < 3 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
+            while (improvedCnt < 4 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
                 taxId = _taxonomy.GetParentTid(taxId);
                 ++improvedCnt;
             }
@@ -579,7 +579,13 @@ private:
       for (i = 0 ; i < size ; ++i)
       {
         result.seqStrNames.push_back( _taxonomy.SeqIdToName(bestSeqIds[i]) ) ;
-        result.taxIds.push_back( _taxonomy.GetOrigTaxId(_taxonomy.SeqIdToTaxId( bestSeqIds[i] )) ) ;
+        improvedCnt = 0;  // improve the taxonomy id to species level
+        taxId = _taxonomy.SeqIdToTaxId(bestSeqIds[i]);
+        while (improvedCnt < 4 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
+           taxId = _taxonomy.GetParentTid(taxId);
+           ++improvedCnt;
+        }
+        result.taxIds.push_back( _taxonomy.GetOrigTaxId(taxId)) ;
       }
     }
     else
@@ -601,7 +607,15 @@ private:
       {
         std::string rankName(_taxonomy.GetTaxRankString( _taxonomy.GetTaxIdRank(taxIds[i])) ) ;
         result.seqStrNames.push_back( rankName ) ;
-        result.taxIds.push_back( _taxonomy.GetOrigTaxId(taxIds[i]) ) ;
+        improvedCnt, taxId = 0, taxIds[i];
+        while (improvedCnt < 4 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
+           taxId = _taxonomy.GetParentTid(taxId);
+           ++improvedCnt;
+        }
+        if (_taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
+           taxId = taxIds[i];
+        }
+        result.taxIds.push_back( _taxonomy.GetOrigTaxId(taxId) ) ;
       }
     }
     return result.taxIds.size() ;
@@ -690,10 +704,10 @@ public:
     SimpleVector<struct _BWTHit> hits ;
     
     SearchForwardAndReverse(r1, r2, hits) ;
-    GetClassificationFromHits(hits, result) ;
     result.queryLength = strlen(r1) ;
     if (r2)
-      result.queryLength += strlen(r2) ;
+       result.queryLength += strlen(r2) ;
+    GetClassificationFromHits(hits, result) ;
   }
 
   const Taxonomy &GetTaxonomy()
