@@ -549,7 +549,7 @@ private:
           iter != seqIdStrandHitRecord[k].end() ; ++iter)
       {
         // Was any top taxonomy id in related validation species taxonomy id, added by Schaudge King
-        if (!_param.relatedTaxId.empty() && taxId == 0 && iter->second.hitLength * 1.7 >= result.queryLength) {
+        if (!_param.relatedTaxId.empty() && taxId == 0 && iter->second.hitLength * 2.68 >= result.queryLength) {
             taxId = _taxonomy.SeqIdToTaxId(iter->first);
             while (improvedCnt < 4 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
                 taxId = _taxonomy.GetParentTid(taxId);
