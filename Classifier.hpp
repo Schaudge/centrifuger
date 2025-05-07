@@ -534,7 +534,7 @@ private:
       for (i = 0 ; i < size ; ++i) {
         std::string rankName(_taxonomy.GetTaxRankString( _taxonomy.GetTaxIdRank(taxIds[i])) ) ;
         result.seqStrNames.push_back( rankName ) ;
-        improvedCnt, taxId = 0, taxIds[i];
+        improvedCnt = 0; taxId = taxIds[i];
         while (improvedCnt < 4 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
            taxId = _taxonomy.GetParentTid(taxId);
            ++improvedCnt;

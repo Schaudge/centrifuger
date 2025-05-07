@@ -382,7 +382,7 @@ public:
     locatedSA.clear() ;
     size_t i, l, sa;
     for (i = sp ; i <= ep ; ++i) {
-      l, sa = 0, 0;
+      l = 0; sa = 0;
       while (!GetSampledSA(i, sa)) {
         i = BackwardExtend( _BWT.Access(i), i) ;
         ++l ;
