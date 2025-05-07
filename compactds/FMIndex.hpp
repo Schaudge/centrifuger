@@ -10,8 +10,7 @@
 // Auxiliary data, other than the BWT and F (alphabet partial sum), for FM index
 // Should be directly initalized through FMBuilderParam, simplifies the parameter passing
 namespace compactds {
-struct _FMIndexAuxData 
-{
+struct _FMIndexAuxData {
   size_t n ; // the length of the text
 
   int sampleStrategy ;
@@ -163,9 +162,7 @@ struct _FMIndexAuxData
   }
 } ;
 
-template <class SeqClass>
-class FMIndex
-{
+template <class SeqClass> class FMIndex {
 private:
   SeqClass _BWT ;
   size_t _n ;
@@ -178,23 +175,16 @@ private:
   
   // @return: whether SA[i] information is stored
   // the SA information is returned through the reference sa 
-  bool GetSampledSA(size_t i, size_t &sa)
-  {
-    if (i == _firstISA)
-    {
+  bool GetSampledSA(size_t i, size_t &sa) {
+    if (i == _firstISA) {
       sa = _auxData.adjustedSA0 ;
       return true ;
-    }
-    else if (i % _auxData.sampleRate == 0)
-    {
+    } else if (i % _auxData.sampleRate == 0) {
       sa = _auxData.sampledSA[i / _auxData.sampleRate] ;
       return true ;
-    }
-    else if (_auxData.selectedSAFilter)
-    {
+    } else if (_auxData.selectedSAFilter) {
       if (Utils::BitRead(_auxData.selectedSAFilter,  i / _auxData.selectedSAFilterSampleRate)
-          && (_auxData.selectedSA.find(i) != _auxData.selectedSA.end()))
-      {
+          && (_auxData.selectedSA.find(i) != _auxData.selectedSA.end())) {
         sa = _auxData.selectedSA[i] ;
         return true ;
       }
@@ -205,28 +195,23 @@ private:
 public:
   struct _FMIndexAuxData _auxData ; // the data used for locate operation
   
-  FMIndex() 
-  {
+  FMIndex() {
     _n = 0 ;
   }
   
-  ~FMIndex() 
-  {
+  ~FMIndex() {
     Free() ;
   }
   
-  void SetAlphabetCode(const Alphabet &a)
-  {
+  void SetAlphabetCode(const Alphabet &a) {
     _alphabets = a ;  
   }
 
-  void SetSequenceExtraParameter(void *p)
-  {
+  void SetSequenceExtraParameter(void *p) {
     _BWT.SetExtraParameter(p) ;
   }
 
-  void Free()
-  {
+  void Free() {
     if (_n > 0)
     {
       _n = 0 ;
@@ -235,8 +220,7 @@ public:
     }
   }
 
-  void InitAuxData(struct _FMBuilderParam &builderParam)
-  {
+  void InitAuxData(struct _FMBuilderParam &builderParam) {
     _auxData.n = builderParam.n ;
   
     _auxData.sampleRate = builderParam.sampleRate ;
@@ -256,25 +240,19 @@ public:
 
     _auxData.adjustedSA0 = builderParam.adjustedSA0 ;
 
-    if (builderParam.selectedSA.size() > 0)
-    {
+    if (builderParam.selectedSA.size() > 0) {
       _auxData.selectedSAFilter = Utils::MallocByBits(DIV_CEIL(_auxData.n, 
             _auxData.selectedSAFilterSampleRate)) ; 
       
       _auxData.selectedSA = builderParam.selectedSA ;
-      for (std::map<size_t, size_t>::iterator iter = _auxData.selectedSA.begin() ;
-                    iter != _auxData.selectedSA.end(); ++iter)
-      {
+      for (auto & iter : _auxData.selectedSA) {
         Utils::BitSet(_auxData.selectedSAFilter, 
-            iter->first / _auxData.selectedSAFilterSampleRate) ;
+            iter.first / _auxData.selectedSAFilterSampleRate) ;
       }
     }
   }
 
-  void Init(FixedSizeElemArray &BWT, size_t n,
-    size_t firstISA, struct _FMBuilderParam& builderParam, 
-    const ALPHABET *alphabetMapping, int alphabetSize) 
-  {
+  void Init(FixedSizeElemArray &BWT, size_t n, size_t firstISA, struct _FMBuilderParam& builderParam, const ALPHABET *alphabetMapping, int alphabetSize) {
     size_t i ;
     
     _plainAlphabetCoder.InitFromList(alphabetMapping, alphabetSize) ; // The input BWT string should be also plain coded in the same fashion
@@ -296,10 +274,8 @@ public:
       _BWT.PrintStats() ;
 
     // F list
-    _plainAlphabetPartialSum = (size_t *)calloc(alphabetSize + 1,
-        sizeof(*_plainAlphabetPartialSum)) ;
-    for (i = 0 ; i < n ; ++i)
-    {
+    _plainAlphabetPartialSum = (size_t *)calloc(alphabetSize + 1, sizeof(*_plainAlphabetPartialSum)) ;
+    for (i = 0 ; i < n ; ++i) {
       ++_plainAlphabetPartialSum[BWT.Read(i)] ; 
     }
     for (i = 1 ; (int)i < alphabetSize ; ++i)
@@ -309,8 +285,7 @@ public:
     _plainAlphabetPartialSum[0] = 0 ;
   }
 
-  size_t Rank(ALPHABET c, size_t p, int inclusive = 1)
-  {
+  size_t Rank(ALPHABET c, size_t p, int inclusive = 1) {
     size_t ret = _BWT.Rank(c, p, inclusive) ;
     // Since we do not use $, the last character in the original string 
     //   will be moved to the _firstISA instead of the first position
@@ -321,9 +296,7 @@ public:
     return ret ;
   }
 
-  void BackwardExtend(ALPHABET c, size_t sp, size_t ep, 
-      size_t &nextSp, size_t &nextEp)
-  {
+  void BackwardExtend(ALPHABET c, size_t sp, size_t ep, size_t &nextSp, size_t &nextEp) {
     size_t offset = _plainAlphabetPartialSum[ _plainAlphabetCoder.Encode(c) ] ; 
     //printf("%c: %d %d %d. %d %d\n", c, offset, sp, ep, _BWT.Rank(c, sp, 0),
     //    _BWT.Rank(c, ep)) ;
@@ -339,27 +312,22 @@ public:
   }
 
   // This one is essentially LF mapping 
-  size_t BackwardExtend(ALPHABET c, size_t p)
-  {
+  size_t BackwardExtend(ALPHABET c, size_t p) {
     size_t offset = _plainAlphabetPartialSum[ _plainAlphabetCoder.Encode(c) ] ;
     return offset + Rank(c, p) - 1 ;
   }
 
   // m - length of s
   // Return the [sp, ep] through the option, and the length of matched prefix in size_t
-  size_t BackwardSearch(char *s, size_t m, size_t &sp, size_t &ep)
-  {
+  size_t BackwardSearch(char *s, size_t m, size_t &sp, size_t &ep) {
     size_t i ;
     if (m < _auxData.precomputeWidth)
       return 0 ;
 
-    if (_auxData.precomputeWidth > 0)
-    {
+    if (_auxData.precomputeWidth > 0) {
       WORD initW = 0 ;
-      for (i = 0 ; i < _auxData.precomputeWidth ; ++i)
-      {
-        if (!_alphabets.IsIn(s[m - 1 - i]))
-        {
+      for (i = 0 ; i < _auxData.precomputeWidth ; ++i) {
+        if (!_alphabets.IsIn(s[m - 1 - i])) {
           sp = 1 ;
           ep = 0 ;
           return i ;
@@ -367,17 +335,14 @@ public:
         initW = (initW << _plainAlphabetBits) | (_plainAlphabetCoder.Encode(s[m - 1 - i])) ;
       }
       
-      if (_auxData.precomputedRange[initW].second == 0)
-      {
+      if (_auxData.precomputedRange[initW].second == 0) {
         sp = 1 ;
         ep = 0 ;
         return _auxData.precomputeWidth - 1 ;
       }
       sp = _auxData.precomputedRange[initW].first ;
       ep = sp + _auxData.precomputedRange[initW].second - 1 ;
-    }
-    else
-    {
+    } else {
       sp = 0 ;
       ep = _n - 1 ;
     }
@@ -385,8 +350,7 @@ public:
     size_t l = _auxData.precomputeWidth ; 
     size_t nextSp = sp ;
     size_t nextEp = ep ;
-    while (l < m)
-    {
+    while (l < m) {
       if (!_alphabets.IsIn(s[m - 1 - l]))
         break ;
       BackwardExtend(s[m - 1 - l], sp, ep, nextSp, nextEp) ;
@@ -400,34 +364,29 @@ public:
   }
 
   // @return: the value of the sampled SA for BWT[i]
-  //          l is the offset between 
-  size_t BackwardToSampledSA(size_t i, size_t &l)
-  {
-    l = 0 ;
-    size_t ret = 0 ;
-    while (!GetSampledSA(i, ret))
-    {
+  size_t BackwardToSampledSA(size_t i) {
+    size_t ret{0};
+    while (!GetSampledSA(i, ret)) {
       i = BackwardExtend( _BWT.Access(i), i) ;
-      ++l ;
     }
     return ret ;
   }
 
   // return ISA[n - 1]
-  size_t GetLastISA()
-  {
+  size_t GetLastISA() {
     return _plainAlphabetPartialSum[ _plainAlphabetCoder.Encode(_lastChr) ] ;
   }
 
   // Calculate the values for SA[sp..ep]
-  void LocateRange(size_t sp, size_t ep, bool withOffset, std::vector<size_t> &locatedSA)
-  {
-    size_t i ;
+  void LocateRange(size_t sp, size_t ep, bool withOffset, std::vector<size_t> &locatedSA) {
     locatedSA.clear() ;
-    for (i = sp ; i <= ep ; ++i)
-    {
-      size_t l ;
-      size_t sa = BackwardToSampledSA(i, l) ;
+    size_t i, l, sa;
+    for (i = sp ; i <= ep ; ++i) {
+      l, sa = 0, 0;
+      while (!GetSampledSA(i, sa)) {
+        i = BackwardExtend( _BWT.Access(i), i) ;
+        ++l ;
+      }
       if (withOffset)
         locatedSA.push_back(sa + l) ;
       else
@@ -435,26 +394,22 @@ public:
     }
   }
 
-  size_t GetSize()
-  {
+  size_t GetSize() {
     return _n ;
   }
 
-  size_t GetAlphabetSize()
-  {
+  size_t GetAlphabetSize() {
     return _alphabets.GetSize() ;
   }
 
-  void PrintSpace()
-  {
+  void PrintSpace() {
     Utils::PrintLog("FM-index space usage (bytes):") ;
     Utils::PrintLog("BWT: %llu", _BWT.GetSpace()) ;
     Utils::PrintLog("sampledSA: %llu", _auxData.sampledSA.GetSpace()) ;
     Utils::PrintLog("precomputedRange: %llu", _auxData.precomputeSize * sizeof(*_auxData.precomputedRange)) ;
   }
 
-  void Save(FILE *fp)
-  {
+  void Save(FILE *fp) {
     SAVE_VAR(fp, _n) ;
     SAVE_VAR(fp, _plainAlphabetBits) ;
     SAVE_VAR(fp, _firstISA) ;
@@ -470,8 +425,7 @@ public:
     _auxData.Save(fp) ;
   }
 
-  void Load(FILE *fp)
-  {
+  void Load(FILE *fp) {
     Free() ;
 
     LOAD_VAR(fp, _n) ;

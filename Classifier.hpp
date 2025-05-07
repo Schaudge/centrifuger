@@ -13,14 +13,12 @@ using namespace compactds ;
 
 //#define LI_DEBUG
 
-struct _classifierParam 
-{
+struct _classifierParam {
   int maxResult ; // the number of entries in the results    
   int minHitLen ;
   int maxResultPerHitFactor ; // Get the SA/tax id for at most maxREsultPerHitsFactor * maxResult entries for each hit
   std::map<size_t, int> relatedTaxId ;
-  _classifierParam()
-  {
+  _classifierParam() {
     maxResult = 1 ;
     minHitLen = 0 ;
     maxResultPerHitFactor = 40 ;
@@ -29,8 +27,7 @@ struct _classifierParam
 } ;
 
 // classification result for one read
-struct _classifierResult
-{
+struct _classifierResult {
   size_t score ;
   size_t secondaryScore ;
   size_t relatedTaxId ;
@@ -39,8 +36,7 @@ struct _classifierResult
   std::vector<std::string> seqStrNames ; // sequence names 
   std::vector<uint64_t> taxIds ; // taxonomy ids (original, not compacted)
 
-  void Clear()
-  {
+  void Clear() {
     score = secondaryScore = relatedTaxId = 0 ;
     hitLength = queryLength = 0 ;
     seqStrNames.clear() ;
@@ -49,23 +45,20 @@ struct _classifierResult
 } ;
 
 // The hit result for each sequence ID
-struct _seqHitRecord
-{
+struct _seqHitRecord {
   size_t seqId ;
   size_t score ;
   int hitLength ;
 } ;
 
 // Each individual hit on BWT string
-struct _BWTHit
-{
+struct _BWTHit {
   size_t sp, ep ; //[sp, ep] range on BWT 
   int l ; // hit length
   int strand ; // -1: minus strand, 0: unkonwn, 1: plus strand
   int offset ; // 0-based offset to the end of the read (because the search is in backward fashion)
   
-  _BWTHit(size_t isp, size_t iep, int il, int ioffset, int istrand)
-  {
+  _BWTHit(size_t isp, size_t iep, int il, int ioffset, int istrand) {
     sp = isp ;
     ep = iep ;
     l = il ;
@@ -74,18 +67,17 @@ struct _BWTHit
   }
 } ;
 
-class Classifier
-{
+class Classifier {
+
 private:
   FMIndex<Sequence_RunBlock> _fm ;
   Taxonomy _taxonomy ;
   std::map<size_t, size_t> _seqLength ;
   _classifierParam _param ;
   int _scoreHitLenAdjust ;
-  char _compChar[256] ;
+  char _compChar[256]{} ;
   
-  void ReverseComplement(char *r, int len)
-  {
+  void ReverseComplement(char *r, int len) {
     int i, j ;
     for (i = 0, j = len - 1 ; i < j ; ++i, --j)
     {
@@ -98,8 +90,7 @@ private:
       r[i] = _compChar[(int)r[i]] ; 
   }
 
-  void InferMinHitLen()
-  {
+  void InferMinHitLen() {
     int mhl = 23 ; // Though centrifuge uses 22, but internally it filter length <= 22, so in our implementation, it should corresponds to 23.
     int alphabetSize = _fm.GetAlphabetSize() ; 
     uint64_t kmerspace = Utils::PowerInt(alphabetSize, mhl)/ 2 ;
@@ -114,7 +105,7 @@ private:
   }
 
   //l: hit length
-  size_t CalculateHitScore(int l)
+  [[nodiscard]] size_t CalculateHitScore(int l) const
   {
     if (l < _param.minHitLen)
       return 0 ;
@@ -128,30 +119,25 @@ private:
   }
 
   // hit list
-  size_t CalculateHitsScore(const SimpleVector<struct _BWTHit> &hits)
-  {
+  size_t CalculateHitsScore(const SimpleVector<struct _BWTHit> &hits) {
     int i ;
     int hitCnt = hits.Size() ;
     size_t score = 0 ;
-    for (i = 0 ; i < hitCnt ; ++i)
-    {
+    for (i = 0 ; i < hitCnt ; ++i) {
       score += CalculateHitScore(hits[i]) ; 
     }
     return score ;
   }
 
   //@return: the number of hits 
-  size_t GetHitsFromRead(char *r, size_t len, SimpleVector<struct _BWTHit> &hits) 
-  {
+  size_t GetHitsFromRead(char *r, size_t len, SimpleVector<struct _BWTHit> &hits) {
     size_t sp = 0, ep = 0 ;
     int l = 0 ;
     int remaining = len ;
     
-    while (remaining >= _param.minHitLen)
-    {
+    while (remaining >= _param.minHitLen) {
       l = _fm.BackwardSearch(r, remaining, sp, ep) ;
-      if (l >= _param.minHitLen && sp <= ep)
-      {
+      if (l >= _param.minHitLen && sp <= ep) {
         struct _BWTHit nh(sp, ep, l, len - remaining, 0) ;
         hits.PushBack(nh) ;
       }
@@ -170,9 +156,7 @@ private:
   //   Forward search probably would be ~20bp random hits + ~80 real hit
   //   Reverse-complement search: will be 90bp real hit
   //   As a result, we will lose the forward candidate
-  void AdjustHitBoundaryFromStrandHits(char *r, char *rc, int len, 
-      SimpleVector<struct _BWTHit> *strandHits)
-  {
+  void AdjustHitBoundaryFromStrandHits(char *r, char *rc, int len, SimpleVector<struct _BWTHit> *strandHits) {
     int i, j, k ;
     if (!strandHits[0].Size() || !strandHits[1].Size())
       return ;
@@ -182,13 +166,11 @@ private:
     int l ;
     j = hitSize[0] - 1 ;
     bool needFix[2] = {false, false} ;
-    for (i = 0 ; i < hitSize[1] ; ++i)
-    {
+    for (i = 0 ; i < hitSize[1] ; ++i) {
       int left, right ; // range on the read, original read
       right = len - strandHits[1][i].offset - 1 ; 
       left = right - strandHits[1][i].l + 1 ;
-      for ( ; j >= 0 ; --j)
-      {
+      for ( ; j >= 0 ; --j) {
         int rcLeft, rcRight ;
         rcLeft = strandHits[0][j].offset ;
         rcRight = rcLeft + strandHits[0][j].l - 1 ;
@@ -203,22 +185,18 @@ private:
           break ;
         if (rcLeft < left && right < rcRight) // reverse hit contains forward hit
           break ;
-        if (rcRight > right)
-        {
+        if (rcRight > right) {
           l = _fm.BackwardSearch(r, rcRight + 1, sp, ep) ;
-          if (rcRight - l + 1 == left && sp <= ep)
-          {
+          if (rcRight - l + 1 == left && sp <= ep) {
             struct _BWTHit nh(sp, ep, l, len - rcRight - 1, 1) ;
             strandHits[1][i] = nh ;
             needFix[1] = true ;
           }
         }
 
-        if (left < rcLeft)
-        {
+        if (left < rcLeft) {
           l = _fm.BackwardSearch(rc, len - left, sp, ep) ;
-          if (left + l - 1 == rcRight && sp <= ep)
-          {
+          if (left + l - 1 == rcRight && sp <= ep) {
             struct _BWTHit nh(sp, ep, l, left, -1) ;
             strandHits[0][j] = nh ;
             needFix[0] = true ;
@@ -228,38 +206,31 @@ private:
     }
 
     // Trim the hit if there is overlapped caused by boundary adjustment
-    for (k = 0 ; k <= 1 ; ++k)
-    {
+    for (k = 0 ; k <= 1 ; ++k) {
       //for (i = 0 ; i < hitSize[k] ; ++i)
       //  printf("%d %d: %d %d\n", k, i, strandHits[k][i].offset,
       //      strandHits[k][i].offset + strandHits[k][i].l - 1) ;
       if (!needFix[k])
         continue ;
-      for (i = 0 ; i < hitSize[k] - 1 ; ++i)
-      {
+      for (i = 0 ; i < hitSize[k] - 1 ; ++i) {
         int starti = strandHits[k][i].offset ; // with respect to the read end (due to backward search) on that strand. Boundary adjustment is moving ahead of the "offset", so it's always the starti moves towards the read end.
         int endi =  starti + strandHits[k][i].l - 1 ;
-        for (j = i + 1 ; j < hitSize[k] ; ++j)
-        {
+        for (j = i + 1 ; j < hitSize[k] ; ++j) {
           int startj = strandHits[k][j].offset ;
           if (startj > endi)
             break ;
           int endj = startj + strandHits[k][j].l - 1 ;
 
           // The two hits overlaps
-          if (strandHits[k][j].l >= strandHits[k][i].l)
-          {
+          if (strandHits[k][j].l >= strandHits[k][i].l) {
             // Shrink i
             strandHits[k][i].l = (startj - starti) ;
             break ;
-          }
-          else 
-          {
+          } else {
             // Shrink j
             if (endj <= endi) // if j is contained in i
               strandHits[k][j].l = 0 ;
-            else
-            {
+            else {
               strandHits[k][j].offset = endi + 1 ;
               strandHits[k][j].l = (endj - (endi + 1) + 1) ;
               break ;
@@ -271,15 +242,13 @@ private:
   }
 
   // It seems the performance for not synchronize mate pair direction works better
-  size_t SearchForwardAndReverseWithWeakMateDirection(char *r1, char *r2, SimpleVector<struct _BWTHit> &hits)
-  {
+  size_t SearchForwardAndReverseWithWeakMateDirection(char *r1, char *r2, SimpleVector<struct _BWTHit> &hits) {
     int i, k, ridx ;
     
     hits.Clear() ;
     SimpleVector<struct _BWTHit> strandHits[2] ; // 0: minus strand, 1: postive strand
     
-    for (ridx = 0 ; ridx <= 1 ; ++ridx) //0-r1, 1-r2
-    {
+    for (ridx = 0 ; ridx <= 1 ; ++ridx) { //0-r1, 1-r2
       if (ridx == 1 && r2 == NULL)
         break ;
 
@@ -301,11 +270,9 @@ private:
       
       size_t strandScore[2] ;
       //int strandLongestHit[2] = {0, 0} ;
-      for (k = 0 ; k < 2 ; ++k)
-      {
+      for (k = 0 ; k < 2 ; ++k) {
         int size = strandHits[k].Size() ;
-        for (i = 0 ; i < size ; ++i)
-        {
+        for (i = 0 ; i < size ; ++i) {
           strandHits[k][i].strand = (2 * k - 1) * (ridx == 0 ? 1 : -1) ; // the strand is with respect to the template, not read
           //if (strandHits[k][i].l > strandLongestHit[k])
           //  strandLongestHit[k] = strandHits[k][i].l ;
@@ -331,8 +298,7 @@ private:
   }
 
   //@return: the size of the hits after selecting the strand 
-  size_t SearchForwardAndReverse(char *r1, char *r2, SimpleVector<struct _BWTHit> &hits)
-  {
+  size_t SearchForwardAndReverse(char *r1, char *r2, SimpleVector<struct _BWTHit> &hits) {
     int i, k ;
     char *rcR1 = NULL ;
     char *rcR2 = NULL ;
@@ -345,8 +311,7 @@ private:
     GetHitsFromRead(r1, r1len, strandHits[1]) ;
     GetHitsFromRead(rcR1, r1len, strandHits[0]) ;
     AdjustHitBoundaryFromStrandHits(r1, rcR1, r1len, strandHits) ;
-    if (r2)
-    {
+    if (r2) {
       rcR2 = strdup(r2) ;
       int r2len = strlen(r2) ;
       ReverseComplement(rcR2, r2len) ;
@@ -360,8 +325,7 @@ private:
     }
     
     size_t strandScore[2] ;
-    for (k = 0 ; k < 2 ; ++k)
-    {
+    for (k = 0 ; k < 2 ; ++k) {
       int size = strandHits[k].Size() ;
       for (i = 0 ; i < size ; ++i)
         strandHits[k][i].strand = 2 * k - 1 ; // the strand is with respect to the template, not read
@@ -375,8 +339,7 @@ private:
       hits = strandHits[1] ;
     else if (strandScore[0] > strandScore[1])
       hits = strandHits[0] ;
-    else
-    {
+    else {
       hits = strandHits[1] ;
       hits.PushBack(strandHits[0]) ;
     }
@@ -388,8 +351,7 @@ private:
     return hits.Size() ;
   }
 
-  size_t GetClassificationFromHits(const SimpleVector<struct _BWTHit> &hits, struct _classifierResult &result)
-  {
+  size_t GetClassificationFromHits(const SimpleVector<struct _BWTHit> &hits, struct _classifierResult &result) {
     int i, k ;
     size_t j ;
     int hitCnt = hits.Size() ;
@@ -401,10 +363,8 @@ private:
     prevUniqHitRecord.score = 0 ;
 
     bool mixStrand = false ;
-    for (i = 1 ; i < hitCnt ; ++i)
-    {
-      if (hits[i].strand != hits[i - 1].strand)
-      {
+    for (i = 1 ; i < hitCnt ; ++i) {
+      if (hits[i].strand != hits[i - 1].strand) {
         mixStrand = true ;
         break ;
       }
@@ -412,8 +372,7 @@ private:
 
     // The hit seqId need to consider the strand separately.
     //   Because sometimes a read can hit both the plus and minus strand and will artificially double the hit length.
-    for (i = 0 ; i < hitCnt ; ++i)
-    {
+    for (i = 0 ; i < hitCnt ; ++i) {
       if (hits[i].l < _param.minHitLen)
         continue ;
       
@@ -424,31 +383,23 @@ private:
       printf("hit: %d sp-ep: %lu %lu %lu offset_l: %d %d\n", i, hits[i].sp, hits[i].ep, hits[i].ep - hits[i].sp + 1, hits[i].offset, hits[i].l) ;
 #endif
       const size_t maxEntries = _param.maxResult * _param.maxResultPerHitFactor ;
-      if (hits[i].ep - hits[i].sp + 1 <= maxEntries 
-          || _param.maxResultPerHitFactor <= 0)
-      {
-        for (j = hits[i].sp ; j <= hits[i].ep ; ++j)
-        {
-          size_t backsearchL = 0 ;
-          size_t seqId = _fm.BackwardToSampledSA(j, backsearchL) ;
+      if (hits[i].ep - hits[i].sp + 1 <= maxEntries || _param.maxResultPerHitFactor <= 0) {
+        for (j = hits[i].sp ; j <= hits[i].ep ; ++j) {
+          size_t seqId = _fm.BackwardToSampledSA(j) ;
 #ifdef LI_DEBUG
           printf("%lu\n", _taxonomy.GetOrigTaxId( _taxonomy.SeqIdToTaxId(seqId) )) ;
 #endif
           localSeqIdHit[seqId] = 1 ;
         }
-      }
-      else
-      {
+      } else {
         // Since the first entry and last entry are likely to be more different
         //   taxonomy-wisely, we shall search "bidirectionally" to make sure 
         //   both end is covered
         size_t rangeSize = hits[i].ep - hits[i].sp + 1 ;
         size_t step = DIV_CEIL(rangeSize, maxEntries) ;
         size_t resolvedCnt = 0 ;
-        for (j = hits[i].sp ; j <= hits[i].ep ; j += step)
-        {
-          size_t backsearchL = 0 ;
-          size_t seqId = _fm.BackwardToSampledSA(j, backsearchL) ;
+        for (j = hits[i].sp ; j <= hits[i].ep ; j += step) {
+          size_t seqId = _fm.BackwardToSampledSA(j) ;
 #ifdef LI_DEBUG
           printf("%lu\n", _taxonomy.GetOrigTaxId( _taxonomy.SeqIdToTaxId(seqId) )) ;
 #endif
@@ -456,10 +407,8 @@ private:
           ++resolvedCnt ;
         }
 
-        for (j = hits[i].ep ; j >= hits[i].sp && j <= hits[i].ep ; j -= step)
-        {
-          size_t backsearchL = 0 ;
-          size_t seqId = _fm.BackwardToSampledSA(j, backsearchL) ;
+        for (j = hits[i].ep ; j >= hits[i].sp && j <= hits[i].ep ; j -= step) {
+          size_t seqId = _fm.BackwardToSampledSA(j) ;
 #ifdef LI_DEBUG
           printf("%lu\n", _taxonomy.GetOrigTaxId( _taxonomy.SeqIdToTaxId(seqId) )) ;
 #endif
@@ -471,38 +420,31 @@ private:
       }
 
       // Update the scores for each seqid
-      for (auto iter = localSeqIdHit.begin(); iter != localSeqIdHit.end() ; ++iter)
-      {
-        size_t seqId = iter->first ;
+      for (auto & iter : localSeqIdHit) {
+        size_t seqId = iter.first ;
         if (!mixStrand && i > 0 && hits[i].ep == hits[i].sp && 
             hits[i - 1].ep == hits[i - 1].sp && 
             hits[i - 1].strand == hits[i].strand &&
-            hits[i - 1].offset + hits[i - 1].l + 1 == hits[i].offset && // the other strand adjustication may cause overlaps of the hit regions. Make sure the two hits only separate by 1 base.
-            seqId == prevUniqHitRecord.seqId) // Merge adjacent unique hits
-        {
+            hits[i - 1].offset + hits[i - 1].l + 1 == hits[i].offset && // the other strand adjudication may cause overlaps of the hit regions. Make sure the two hits only separate by 1 base.
+            seqId == prevUniqHitRecord.seqId) { // Merge adjacent unique hits
+
           seqIdStrandHitRecord[k][seqId].score -= prevUniqHitRecord.score ;
 
           prevUniqHitRecord.hitLength += hits[i].l ;
           prevUniqHitRecord.score = CalculateHitScore(prevUniqHitRecord.hitLength) ;
           seqIdStrandHitRecord[k][seqId].score += prevUniqHitRecord.score ;
           seqIdStrandHitRecord[k][seqId].hitLength += hits[i].l ;
-        }
-        else // Regularly update the score
-        {
-          if (seqIdStrandHitRecord[k].find(seqId) == seqIdStrandHitRecord[k].end())
-          {
+        } else { // Regularly update the score
+          if (seqIdStrandHitRecord[k].find(seqId) == seqIdStrandHitRecord[k].end()) {
             seqIdStrandHitRecord[k][seqId].seqId = seqId ;
             seqIdStrandHitRecord[k][seqId].score = score ;
             seqIdStrandHitRecord[k][seqId].hitLength = hits[i].l ;
-          }
-          else
-          {
+          } else {
             seqIdStrandHitRecord[k][seqId].score += score ;
             seqIdStrandHitRecord[k][seqId].hitLength += hits[i].l ;
           }
         
-          if (hits[i].ep == hits[i].sp)
-          {
+          if (hits[i].ep == hits[i].sp) {
             prevUniqHitRecord.seqId = seqId ;
             prevUniqHitRecord.score = score ;
             prevUniqHitRecord.hitLength = hits[i].l ;
@@ -515,22 +457,17 @@ private:
     size_t bestScore = 0 ;
     size_t secondBestScore = 0 ;
     size_t bestScoreHitLength = 0 ;
-    for (k = 0 ; k <= 1 ; ++k)
-    {
-      for (std::map<size_t, struct _seqHitRecord>::iterator iter = seqIdStrandHitRecord[k].begin() ; 
-          iter != seqIdStrandHitRecord[k].end() ; ++iter)
-      {
+    for (k = 0 ; k <= 1 ; ++k) {
+      for (auto & iter : seqIdStrandHitRecord[k]) {
 #ifdef LI_DEBUG
         printf("score: %lu %lu %d\n", _taxonomy.GetOrigTaxId( _taxonomy.SeqIdToTaxId(iter->first)), iter->second.score, iter->second.hitLength) ;
 #endif
-        if (iter->second.score > bestScore)
-        {
+        if (iter.second.score > bestScore) {
           secondBestScore = bestScore ;
-          bestScore = iter->second.score ;
-          bestScoreHitLength = iter->second.hitLength ;
-        }
-        else if (iter->second.score > secondBestScore)
-          secondBestScore = iter->second.score ;
+          bestScore = iter.second.score ;
+          bestScoreHitLength = iter.second.hitLength ;
+        } else if (iter.second.score > secondBestScore)
+          secondBestScore = iter.second.score ;
       }
     }
 
@@ -543,14 +480,11 @@ private:
     SimpleVector<size_t> bestSeqIds ;
     std::map<size_t, int> bestSeqIdUsed ;
     uint64_t taxId{0}, improvedCnt{0};
-    for (k = 0 ; k <= 1 ; ++k)
-    {
-      for (std::map<size_t, struct _seqHitRecord>::iterator iter = seqIdStrandHitRecord[k].begin() ; 
-          iter != seqIdStrandHitRecord[k].end() ; ++iter)
-      {
+    for (k = 0 ; k <= 1 ; ++k) {
+      for (auto & iter : seqIdStrandHitRecord[k]) {
         // Was any top taxonomy id in related validation species taxonomy id, added by Schaudge King
-        if (!_param.relatedTaxId.empty() && taxId == 0 && iter->second.hitLength * 2.68 >= result.queryLength) {
-            taxId = _taxonomy.SeqIdToTaxId(iter->first);
+        if (!_param.relatedTaxId.empty() && taxId == 0 && iter.second.hitLength * 2.68 >= result.queryLength) {
+            taxId = _taxonomy.SeqIdToTaxId(iter.first);
             while (improvedCnt < 4 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
                 taxId = _taxonomy.GetParentTid(taxId);
                 ++improvedCnt;
@@ -561,11 +495,9 @@ private:
             }
         }
 
-        if (iter->second.score == bestScore && 
-            bestSeqIdUsed.find(iter->first) == bestSeqIdUsed.end())
-        {
-          bestSeqIds.PushBack(iter->first) ;
-          bestSeqIdUsed[iter->first] = 1 ;
+        if (iter.second.score == bestScore &&  bestSeqIdUsed.find(iter.first) == bestSeqIdUsed.end()) {
+          bestSeqIds.PushBack(iter.first) ;
+          bestSeqIdUsed[iter.first] = 1 ;
         }
       }
     }
@@ -573,11 +505,9 @@ private:
     if (bestSeqIds.Size() > 1)
       result.secondaryScore = bestScore ;
 
-    if (bestSeqIds.Size() <= _param.maxResult)
-    {
+    if (bestSeqIds.Size() <= _param.maxResult) {
       int size = bestSeqIds.Size() ;
-      for (i = 0 ; i < size ; ++i)
-      {
+      for (i = 0 ; i < size ; ++i) {
         result.seqStrNames.push_back( _taxonomy.SeqIdToName(bestSeqIds[i]) ) ;
         improvedCnt = 0;  // improve the taxonomy id to species level
         taxId = _taxonomy.SeqIdToTaxId(bestSeqIds[i]);
@@ -587,9 +517,7 @@ private:
         }
         result.taxIds.push_back( _taxonomy.GetOrigTaxId(taxId)) ;
       }
-    }
-    else
-    {
+    } else {
       int size = bestSeqIds.Size() ;
       SimpleVector<size_t> bestSeqTaxIds ;
       bestSeqTaxIds.Reserve(size) ;
@@ -603,8 +531,7 @@ private:
       //_taxonomy.PromoteToCanonicalTaxRank(taxIds, /*dedup=*/true) ;
 
       size = taxIds.Size() ;
-      for (i = 0 ; i < size ; ++i)
-      {
+      for (i = 0 ; i < size ; ++i) {
         std::string rankName(_taxonomy.GetTaxRankString( _taxonomy.GetTaxIdRank(taxIds[i])) ) ;
         result.seqStrNames.push_back( rankName ) ;
         improvedCnt, taxId = 0, taxIds[i];
@@ -622,8 +549,7 @@ private:
   }
   
 public:
-  Classifier() 
-  {
+  Classifier() {
     _scoreHitLenAdjust = 15 ;
     int i ;
     for (i = 0 ; i < 256 ; ++i)
@@ -634,17 +560,15 @@ public:
     _compChar['T'] = 'A' ;
   }
 
-  ~Classifier() {Free() ;}
+  ~Classifier() { Free(); }
 
-  void Free()
-  {
+  void Free() {
     _fm.Free() ;
     _taxonomy.Free() ;
     _seqLength.clear() ;
   }
 
-  void Init(char *idxPrefix, char *relatedTaxPath, struct _classifierParam param)
-  {
+  void Init(char *idxPrefix, char *relatedTaxPath, struct _classifierParam param) {
     FILE *fp ;
     char *nameBuffer = (char *)malloc(sizeof(char) * (strlen(idxPrefix) + 17))  ;  
  
@@ -664,16 +588,14 @@ public:
     sprintf(nameBuffer, "%s.3.cfr", idxPrefix) ;
     fp = fopen(nameBuffer, "r") ;
     size_t tmp[2] ;
-    while (fread(tmp, sizeof(tmp[0]), 2, fp))
-    {
+    while (fread(tmp, sizeof(tmp[0]), 2, fp)) {
       _seqLength[tmp[0]] = tmp[1] ;
     }
     fclose(fp) ;
     
     Utils::PrintLog("Finishes loading index.") ;
 
-    if (relatedTaxPath[0] != '\0') // read related species level taxonomy id from configuration
-    {
+    if (relatedTaxPath[0] != '\0') { // read related species level taxonomy id from configuration
         std::ifstream sidHandler(relatedTaxPath);
         if (!sidHandler.is_open()) {
             std::cerr << "Failed to open the related taxonomy id file!" << std::endl;
@@ -687,8 +609,7 @@ public:
     }
 
     _param = param ;
-    if (_param.minHitLen <= 0)
-    {
+    if (_param.minHitLen <= 0) {
       InferMinHitLen() ;
       Utils::PrintLog("Inferred --min-hitlen: %d", _param.minHitLen) ;
     }
@@ -697,8 +618,7 @@ public:
   }
 
   // Main function to return the classification results 
-  void Query(char *r1, char *r2, struct _classifierResult &result)
-  {
+  void Query(char *r1, char *r2, struct _classifierResult &result) {
     result.Clear() ;
 
     SimpleVector<struct _BWTHit> hits ;
@@ -710,8 +630,7 @@ public:
     GetClassificationFromHits(hits, result) ;
   }
 
-  const Taxonomy &GetTaxonomy()
-  {
+  const Taxonomy &GetTaxonomy() {
     return _taxonomy ;
   }
 } ;
