@@ -60,7 +60,7 @@ An example of pre-built index containing human, bacteria, archea, and virus geno
       Optional:
         -t INT: number of threads [1]
         -k INT: report upto <int> distinct, primary assignments for each read pair [1]
-        -f DOUBLE: the minimum hits match fraction (< 1) of the query length for reads classification [0.5]\n"
+        -f DOUBLE: the minimum hits match fraction (< 1) of the query length for reads classification [0.5]
 	    --tid STR: the related taxonomy id (for association) file path <str>
         --un STR: output unclassified reads to files with the prefix of <str>, e.g. <str>_1/2.fq.gz
         --cl STR: output classified reads to files with the prefix of <str>
