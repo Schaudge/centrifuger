@@ -28,6 +28,7 @@ char usage[] = "./centrifuger [OPTIONS] > output.tsv:\n"
   //"\t-o STRING: output prefix [centrifuger]\n"
   "\t-t INT: number of threads [1]\n"
   "\t-k INT: report upto <int> distinct, primary assignments for each read pair [1]\n"
+  "\t-f DOUBLE: the minimum hits match fraction (< 1) of the query length for reads classification [0.5]\n"
   "\t--un STR: output unclassified reads to files with the prefix of <str>\n"
   "\t--cl STR: output classified reads to files with the prefix of <str>\n"
   "\t--tid STR: the related taxonomy id (for association) file path <str>\n"
@@ -42,7 +43,7 @@ char usage[] = "./centrifuger [OPTIONS] > output.tsv:\n"
   "\t-v: print the version information and quit\n"
   ;
 
-static const char *short_options = "x:1:2:u:i:o:t:k:v" ;
+static const char *short_options = "x:1:2:u:i:o:t:k:f:v" ;
 static struct option long_options[] = {
   { "un", required_argument, 0, ARGV_OUTPUT_UNCLASSIFIED},
   { "cl", required_argument, 0, ARGV_OUTPUT_CLASSIFIED},
@@ -350,6 +351,10 @@ int main(int argc, char *argv[])
     else if (c == 'k')
     {
       classifierParam.maxResult = atoi(optarg) ;
+    }
+    else if (c == 'f')
+    {
+      classifierParam.minMatchFraction = atof(optarg) ;
     }
     else if (c == 'v')
     {

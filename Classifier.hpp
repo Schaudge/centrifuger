@@ -17,10 +17,12 @@ struct _classifierParam {
   int maxResult ; // the number of entries in the results    
   int minHitLen ;
   int maxResultPerHitFactor ; // Get the SA/tax id for at most maxREsultPerHitsFactor * maxResult entries for each hit
+  double minMatchFraction ;
   std::map<size_t, int> relatedTaxId ;
   _classifierParam() {
     maxResult = 1 ;
     minHitLen = 0 ;
+    minMatchFraction = 0.5;
     maxResultPerHitFactor = 40 ;
     relatedTaxId.clear() ;
   }
@@ -479,15 +481,15 @@ private:
 
     SimpleVector<size_t> bestSeqIds ;
     std::map<size_t, int> bestSeqIdUsed ;
-    uint64_t taxId{0}, improvedCnt{0};
+    uint64_t taxId{0}, liftCnt{0};
     for (k = 0 ; k <= 1 ; ++k) {
       for (auto & iter : seqIdStrandHitRecord[k]) {
         // Was any top taxonomy id in related validation species taxonomy id, added by Schaudge King
         if (!_param.relatedTaxId.empty() && taxId == 0 && iter.second.hitLength * 2.68 >= result.queryLength) {
             taxId = _taxonomy.SeqIdToTaxId(iter.first);
-            while (improvedCnt < 4 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
+            while (liftCnt < 4 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
                 taxId = _taxonomy.GetParentTid(taxId);
-                ++improvedCnt;
+                ++liftCnt;
             }
             taxId = _taxonomy.GetOrigTaxId(taxId);
             if (_param.relatedTaxId.find(taxId) != _param.relatedTaxId.end()) {
@@ -495,33 +497,33 @@ private:
             }
         }
 
-        if (iter.second.score == bestScore &&  bestSeqIdUsed.find(iter.first) == bestSeqIdUsed.end()) {
+        if (iter.second.score == bestScore && iter.second.hitLength >= result.queryLength * _param.minMatchFraction && bestSeqIdUsed.find(iter.first) == bestSeqIdUsed.end()) {
           bestSeqIds.PushBack(iter.first) ;
           bestSeqIdUsed[iter.first] = 1 ;
         }
       }
     }
 
-    if (bestSeqIds.Size() > 1)
+    int bestSize = bestSeqIds.Size() ;
+    if (bestSize > 1)
       result.secondaryScore = bestScore ;
 
-    if (bestSeqIds.Size() <= _param.maxResult) {
-      int size = bestSeqIds.Size() ;
-      for (i = 0 ; i < size ; ++i) {
-        result.seqStrNames.push_back( _taxonomy.SeqIdToName(bestSeqIds[i]) ) ;
-        improvedCnt = 0;  // improve the taxonomy id to species level
+    if (bestSize <= _param.maxResult) {
+      for (i = 0 ; i < bestSize ; ++i) {
+        result.seqStrNames.emplace_back( _taxonomy.SeqIdToName(bestSeqIds[i]) ) ;
+        liftCnt = 0;  // lift the taxonomy id to species level
         taxId = _taxonomy.SeqIdToTaxId(bestSeqIds[i]);
-        while (improvedCnt < 4 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
+        while (liftCnt < 4 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
            taxId = _taxonomy.GetParentTid(taxId);
-           ++improvedCnt;
+           ++liftCnt;
         }
-        result.taxIds.push_back( _taxonomy.GetOrigTaxId(taxId)) ;
+        result.taxIds.emplace_back( _taxonomy.GetOrigTaxId(taxId)) ;
       }
     } else {
-      int size = bestSeqIds.Size() ;
+
       SimpleVector<size_t> bestSeqTaxIds ;
-      bestSeqTaxIds.Reserve(size) ;
-      for (i = 0 ; i < size ; ++i)
+      bestSeqTaxIds.Reserve(bestSize) ;
+      for (i = 0 ; i < bestSize ; ++i)
         bestSeqTaxIds.PushBack( _taxonomy.SeqIdToTaxId(bestSeqIds[i]) ) ;
 
       SimpleVector<size_t> taxIds ;
@@ -530,19 +532,19 @@ private:
       //   Maybe we will do the same in some future version.
       //_taxonomy.PromoteToCanonicalTaxRank(taxIds, /*dedup=*/true) ;
 
-      size = taxIds.Size() ;
-      for (i = 0 ; i < size ; ++i) {
+      bestSize = taxIds.Size() ;
+      for (i = 0 ; i < bestSize ; ++i) {
         std::string rankName(_taxonomy.GetTaxRankString( _taxonomy.GetTaxIdRank(taxIds[i])) ) ;
-        result.seqStrNames.push_back( rankName ) ;
-        improvedCnt = 0; taxId = taxIds[i];
-        while (improvedCnt < 4 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
+        result.seqStrNames.emplace_back( rankName ) ;
+          liftCnt = 0; taxId = taxIds[i];
+        while (liftCnt < 4 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
            taxId = _taxonomy.GetParentTid(taxId);
-           ++improvedCnt;
+           ++liftCnt;
         }
         if (_taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
            taxId = taxIds[i];
         }
-        result.taxIds.push_back( _taxonomy.GetOrigTaxId(taxId) ) ;
+        result.taxIds.emplace_back( _taxonomy.GetOrigTaxId(taxId) ) ;
       }
     }
     return result.taxIds.size() ;
