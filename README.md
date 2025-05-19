@@ -60,6 +60,8 @@ An example of pre-built index containing human, bacteria, archea, and virus geno
       Optional:
         -t INT: number of threads [1]
         -k INT: report upto <int> distinct, primary assignments for each read pair [1]
+        -f DOUBLE: the minimum hits match fraction (< 1) of the query length for reads classification [0.5]\n"
+	    --tid STR: the related taxonomy id (for association) file path <str>
         --un STR: output unclassified reads to files with the prefix of <str>, e.g. <str>_1/2.fq.gz
         --cl STR: output classified reads to files with the prefix of <str>
         --barcode STR: path to the barcode file
@@ -88,17 +90,18 @@ The primary input to Centrifuger is the index of the genome database (-x), and g
 
 The output is to stdout, with the TSV format as following:
 ```
-readID    seqID   taxID score      2ndBestScore    hitLength    queryLength numMatches
-1_1       MT019531.1     2697049   4225       0               80   80      1
+readID  seqID   taxID   relatedTaxID    score      2ndBestScore    hitLength    queryLength numMatches
+1_1 MT019531.1     2697049    9606    4225    0    80   80    1
 
 The first column is the read ID from a raw sequencing read (e.g., 1_1 in the example).
 The second column is the sequence ID of the genomic sequence, where the read is classified (e.g., MT019531.1).
 The third column is the taxonomic ID of the genomic sequence in the second column (e.g., 2697049).
-The fourth column is the score for the classification, which is the weighted sum of hits (e.g., 4225)
-The fifth column is the score for the next best classification (e.g., 0).
-The sixth column is the number of base pairs of the read that match the genomic sequence found by Centrifuger (e.g., 80) 
-The seventh column is the length of a read or the combined length of mate pairs (e.g., 80). 
-The eighth column is the number of classifications for this read, indicating how many assignments were made in the output (e.g.,1).
+The fourth column is the related taxonomic ID of other taxonomic list specified by --tid parameter (e.g., 9606).
+The fifth column is the score for the classification, which is the weighted sum of hits (e.g., 4225)
+The sixth column is the score for the next best classification (e.g., 0).
+The seventh column is the number of base pairs of the read that match the genomic sequence found by Centrifuger (e.g., 80) 
+The eighth column is the length of a read or the combined length of mate pairs (e.g., 80). 
+The nineth column is the number of classifications for this read, indicating how many assignments were made in the output (e.g.,1).
 ```
 
 The "centrifuger-quant" estimate the abundance for each taxonomy ID, and the quantification output has 7 columns.
@@ -198,4 +201,8 @@ The output.tsv should be similar to the example_class.out file in the folder.
 
 ### Support
 
-Create a [GitHub issue](https://github.com/mourisl/centrifuger/issues). 
+Create a [GitHub issue](https://github.com/mourisl/centrifuger/issues).
+
+```
+awk '{print $1"\t"$2"\t"$3"\t"$5"\t"$6"\t"$7"\t"$8"\t"$9;}' example/result.out
+```

@@ -73,7 +73,7 @@ public:
   {
     int len = strlen(prefix) ;      
     char extension[10] = "" ;
-    char *name = (char *)malloc(sizeof(char) * (len + 1 + 10)) ;
+    char *name = (char *) malloc(sizeof(char) * (len + 1 + 10)) ;
     
     gzFile *gzFps = _gzFpUnclassified ;
     if (category == 0)
@@ -191,16 +191,16 @@ public:
         continue ;
       
       if (qual1 == NULL)
-        gzprintf(gzFps[0], ">%s\n%s\n", readid, seq1) ;
+        gzprintf(gzFps[0], ">%s/1\n%s\n", readid, seq1) ;
       else
-        gzprintf(gzFps[0], "@%s\n%s\n+\n%s\n", readid, seq1, qual1) ;
+        gzprintf(gzFps[0], "@%s/1\n%s\n+\n%s\n", readid, seq1, qual1) ;
       
       if (seq2 != NULL) 
       {
         if (qual2 == NULL)
-          gzprintf(gzFps[1], ">%s\n%s\n", readid, seq2) ;
+          gzprintf(gzFps[1], ">%s/2\n%s\n", readid, seq2) ;
         else
-          gzprintf(gzFps[1], "@%s\n%s\n+\n%s\n", readid, seq2, qual2) ;
+          gzprintf(gzFps[1], "@%s/2\n%s\n+\n%s\n", readid, seq2, qual2) ;
       }
 
       if (_hasBarcode)
