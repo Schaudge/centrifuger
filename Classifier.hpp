@@ -57,7 +57,7 @@ struct _seqHitRecord {
 struct _BWTHit {
   size_t sp, ep ; //[sp, ep] range on BWT 
   int l ; // hit length
-  int strand ; // -1: minus strand, 0: unkonwn, 1: plus strand
+  int strand ; // -1: minus strand, 0: unknown, 1: plus strand
   int offset ; // 0-based offset to the end of the read (because the search is in backward fashion)
   
   _BWTHit(size_t isp, size_t iep, int il, int ioffset, int istrand) {
@@ -93,7 +93,7 @@ private:
   }
 
   void InferMinHitLen() {
-    int mhl = 23 ; // Though centrifuge uses 22, but internally it filter length <= 22, so in our implementation, it should corresponds to 23.
+    int mhl = 23 ; // Though centrifuge uses 22, but internally it filter length <= 22, so in our implementation, it should correspond to 23.
     int alphabetSize = _fm.GetAlphabetSize() ; 
     uint64_t kmerspace = Utils::PowerInt(alphabetSize, mhl)/ 2 ;
     uint64_t n = _fm.GetSize() ;
@@ -132,7 +132,7 @@ private:
   }
 
   //@return: the number of hits 
-  size_t GetHitsFromRead(char *r, size_t len, SimpleVector<struct _BWTHit> &hits) {
+  size_t GetHitsFromRead(char *r, int len, SimpleVector<struct _BWTHit> &hits) {
     size_t sp = 0, ep = 0 ;
     int l = 0 ;
     int remaining = len ;
@@ -299,9 +299,10 @@ private:
     return hits.Size() ;
   }
 
-  //@return: the size of the hits after selecting the strand 
-  size_t SearchForwardAndReverse(char *r1, char *r2, SimpleVector<struct _BWTHit> &hits) {
-    int i, k ;
+  //@return: any majority match length in one end for paired end reads?
+  bool SearchForwardAndReverse(char *r1, char *r2, SimpleVector<struct _BWTHit> &hits) {
+    bool one_end_majority_for_pair = false ;
+    int i, j, k ;
     char *rcR1 = NULL ;
     char *rcR2 = NULL ;
     int r1len = strlen(r1) ;
@@ -314,6 +315,12 @@ private:
     GetHitsFromRead(rcR1, r1len, strandHits[0]) ;
     AdjustHitBoundaryFromStrandHits(r1, rcR1, r1len, strandHits) ;
     if (r2) {
+      if (r1len > 50) {
+          for (i = 0 ; i < strandHits[0].Size() ; ++i)
+              if (strandHits[0][i].l * 5 >= r1len * 7) one_end_majority_for_pair = true ;
+          for (j = 0 ; j < strandHits[1].Size() ; ++j)
+              if (strandHits[1][j].l * 5 >= r1len * 7) one_end_majority_for_pair = true ;
+      }
       rcR2 = strdup(r2) ;
       int r2len = strlen(r2) ;
       ReverseComplement(rcR2, r2len) ;
@@ -324,6 +331,13 @@ private:
       AdjustHitBoundaryFromStrandHits(r2, rcR2, r2len, r2StrandHits) ;
       for (i = 0 ; i < 2; ++i)
         strandHits[i].PushBack(r2StrandHits[1 - i]) ;
+
+      if (r2len > 50 && !one_end_majority_for_pair) {
+          for (i = 0; i < r2StrandHits[0].Size() ; ++i)
+              if (r2StrandHits[0][i].l * 5 >= r2len * 7) one_end_majority_for_pair = true ;
+          for (j = 0 ; j < r2StrandHits[1].Size() ; ++j)
+              if (r2StrandHits[1][j].l * 5 >= r2len * 7) one_end_majority_for_pair = true ;
+      }
     }
     
     size_t strandScore[2] ;
@@ -350,10 +364,10 @@ private:
     if (rcR2)
       free(rcR2) ;
 
-    return hits.Size() ;
+    return one_end_majority_for_pair ;
   }
 
-  size_t GetClassificationFromHits(const SimpleVector<struct _BWTHit> &hits, struct _classifierResult &result) {
+  size_t GetClassificationFromHits(const SimpleVector<struct _BWTHit> &hits, struct _classifierResult &result, bool pass) {
     int i, k ;
     size_t j ;
     int hitCnt = hits.Size() ;
@@ -478,6 +492,7 @@ private:
     result.relatedTaxId = 0;
     result.secondaryScore = secondBestScore ;
     result.hitLength = bestScoreHitLength ;
+    auto minMatchLen = static_cast<uint32_t>(result.queryLength * _param.minMatchFraction) ;
 
     SimpleVector<size_t> bestSeqIds ;
     std::map<size_t, int> bestSeqIdUsed ;
@@ -497,7 +512,7 @@ private:
             }
         }
 
-        if (iter.second.score == bestScore && iter.second.hitLength >= result.queryLength * _param.minMatchFraction && bestSeqIdUsed.find(iter.first) == bestSeqIdUsed.end()) {
+        if (iter.second.score == bestScore && bestSeqIdUsed.find(iter.first) == bestSeqIdUsed.end() && (iter.second.hitLength >= minMatchLen || pass)) {
           bestSeqIds.PushBack(iter.first) ;
           bestSeqIdUsed[iter.first] = 1 ;
         }
@@ -625,11 +640,11 @@ public:
 
     SimpleVector<struct _BWTHit> hits ;
     
-    SearchForwardAndReverse(r1, r2, hits) ;
+    bool hasMajorMatch = SearchForwardAndReverse(r1, r2, hits) ;
     result.queryLength = strlen(r1) ;
     if (r2)
        result.queryLength += strlen(r2) ;
-    GetClassificationFromHits(hits, result) ;
+    GetClassificationFromHits(hits, result, hasMajorMatch) ;
   }
 
   const Taxonomy &GetTaxonomy() {
