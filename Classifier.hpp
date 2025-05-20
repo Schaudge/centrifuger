@@ -33,8 +33,8 @@ struct _classifierResult {
   size_t score ;
   size_t secondaryScore ;
   size_t relatedTaxId ;
-  int hitLength ;
-  int queryLength ;
+  uint32_t hitLength ;
+  uint32_t queryLength ;
   std::vector<std::string> seqStrNames ; // sequence names 
   std::vector<uint64_t> taxIds ; // taxonomy ids (original, not compacted)
 
@@ -50,7 +50,7 @@ struct _classifierResult {
 struct _seqHitRecord {
   size_t seqId ;
   size_t score ;
-  int hitLength ;
+  uint32_t hitLength ;
 } ;
 
 // Each individual hit on BWT string
@@ -107,7 +107,7 @@ private:
   }
 
   //l: hit length
-  [[nodiscard]] size_t CalculateHitScore(int l) const
+  [[nodiscard]] size_t CalculateHitScore(uint32_t l) const
   {
     if (l < _param.minHitLen)
       return 0 ;
@@ -308,7 +308,7 @@ private:
     rcR1 = strdup(r1) ;
     ReverseComplement(rcR1, r1len) ;
     
-    SimpleVector<struct _BWTHit> strandHits[2] ; // 0: minus strand, 1: postive strand
+    SimpleVector<struct _BWTHit> strandHits[2] ; // 0: minus strand, 1: positive strand
     
     GetHitsFromRead(r1, r1len, strandHits[1]) ;
     GetHitsFromRead(rcR1, r1len, strandHits[0]) ;
@@ -317,12 +317,12 @@ private:
       rcR2 = strdup(r2) ;
       int r2len = strlen(r2) ;
       ReverseComplement(rcR2, r2len) ;
-      SimpleVector<struct _BWTHit> r2StrandHits[2] ; // 0: minus strand, 1: postive strand
+      SimpleVector<struct _BWTHit> r2StrandHits[2] ; // 0: minus strand, 1: positive strand
       
       GetHitsFromRead(r2, r2len, r2StrandHits[1]) ;
       GetHitsFromRead(rcR2, r2len, r2StrandHits[0]) ;
       AdjustHitBoundaryFromStrandHits(r2, rcR2, r2len, r2StrandHits) ;
-      for (i = 0 ; i <= 1 ; ++i)
+      for (i = 0 ; i < 2; ++i)
         strandHits[i].PushBack(r2StrandHits[1 - i]) ;
     }
     
@@ -458,8 +458,8 @@ private:
     // Select the best score
     size_t bestScore = 0 ;
     size_t secondBestScore = 0 ;
-    size_t bestScoreHitLength = 0 ;
-    for (k = 0 ; k <= 1 ; ++k) {
+    uint32_t bestScoreHitLength = 0 ;
+    for (k = 0 ; k < 2; ++k) {
       for (auto & iter : seqIdStrandHitRecord[k]) {
 #ifdef LI_DEBUG
         printf("score: %lu %lu %d\n", _taxonomy.GetOrigTaxId( _taxonomy.SeqIdToTaxId(iter->first)), iter->second.score, iter->second.hitLength) ;
