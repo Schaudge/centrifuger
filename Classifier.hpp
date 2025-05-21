@@ -21,7 +21,7 @@ struct _classifierParam {
   std::map<size_t, int> relatedTaxId ;
   _classifierParam() {
     maxResult = 1 ;
-    minHitLen = 0 ;
+    minHitLen = 3 ;
     minMatchFraction = 0.5;
     maxResultPerHitFactor = 40 ;
     relatedTaxId.clear() ;
@@ -299,9 +299,8 @@ private:
     return hits.Size() ;
   }
 
-  //@return: any majority match length in one end for paired end reads?
-  bool SearchForwardAndReverse(char *r1, char *r2, SimpleVector<struct _BWTHit> &hits) {
-    bool one_end_majority_for_pair = false ;
+  //@return: the size of the hits after selecting the strand
+  size_t SearchForwardAndReverse(char *r1, char *r2, SimpleVector<struct _BWTHit> &hits) {
     int i, j, k ;
     char *rcR1 = NULL ;
     char *rcR2 = NULL ;
@@ -315,12 +314,6 @@ private:
     GetHitsFromRead(rcR1, r1len, strandHits[0]) ;
     AdjustHitBoundaryFromStrandHits(r1, rcR1, r1len, strandHits) ;
     if (r2) {
-      if (r1len > 50) {
-          for (i = 0 ; i < strandHits[0].Size() ; ++i)
-              if (strandHits[0][i].l * 5 >= r1len * 7) one_end_majority_for_pair = true ;
-          for (j = 0 ; j < strandHits[1].Size() ; ++j)
-              if (strandHits[1][j].l * 5 >= r1len * 7) one_end_majority_for_pair = true ;
-      }
       rcR2 = strdup(r2) ;
       int r2len = strlen(r2) ;
       ReverseComplement(rcR2, r2len) ;
@@ -332,12 +325,6 @@ private:
       for (i = 0 ; i < 2; ++i)
         strandHits[i].PushBack(r2StrandHits[1 - i]) ;
 
-      if (r2len > 50 && !one_end_majority_for_pair) {
-          for (i = 0; i < r2StrandHits[0].Size() ; ++i)
-              if (r2StrandHits[0][i].l * 5 >= r2len * 7) one_end_majority_for_pair = true ;
-          for (j = 0 ; j < r2StrandHits[1].Size() ; ++j)
-              if (r2StrandHits[1][j].l * 5 >= r2len * 7) one_end_majority_for_pair = true ;
-      }
     }
     
     size_t strandScore[2] ;
@@ -364,10 +351,10 @@ private:
     if (rcR2)
       free(rcR2) ;
 
-    return one_end_majority_for_pair ;
+    return hits.Size() ;
   }
 
-  size_t GetClassificationFromHits(const SimpleVector<struct _BWTHit> &hits, struct _classifierResult &result, bool pass) {
+  size_t GetClassificationFromHits(const SimpleVector<struct _BWTHit> &hits, struct _classifierResult &result, uint32_t maxReadLength) {
     int i, k ;
     size_t j ;
     int hitCnt = hits.Size() ;
@@ -492,7 +479,7 @@ private:
     result.relatedTaxId = 0;
     result.secondaryScore = secondBestScore ;
     result.hitLength = bestScoreHitLength ;
-    auto minMatchLen = static_cast<uint32_t>(result.queryLength * _param.minMatchFraction) ;
+    auto minMatchLen = static_cast<uint32_t>(maxReadLength * _param.minMatchFraction) ;
 
     SimpleVector<size_t> bestSeqIds ;
     std::map<size_t, int> bestSeqIdUsed ;
@@ -512,7 +499,7 @@ private:
             }
         }
 
-        if (iter.second.score == bestScore && bestSeqIdUsed.find(iter.first) == bestSeqIdUsed.end() && (iter.second.hitLength >= minMatchLen || pass)) {
+        if (iter.second.score == bestScore && bestSeqIdUsed.find(iter.first) == bestSeqIdUsed.end() && iter.second.hitLength >= minMatchLen) {
           bestSeqIds.PushBack(iter.first) ;
           bestSeqIdUsed[iter.first] = 1 ;
         }
@@ -640,11 +627,14 @@ public:
 
     SimpleVector<struct _BWTHit> hits ;
     
-    bool hasMajorMatch = SearchForwardAndReverse(r1, r2, hits) ;
-    result.queryLength = strlen(r1) ;
-    if (r2)
-       result.queryLength += strlen(r2) ;
-    GetClassificationFromHits(hits, result, hasMajorMatch) ;
+    SearchForwardAndReverse(r1, r2, hits) ;
+    uint32_t qualifiedRefSize = strlen(r1) ;
+    if (r2) {
+        uint32_t r2len = strlen(r2) ;
+        result.queryLength += r2len;
+        if (r2len > qualifiedRefSize) qualifiedRefSize = r2len ;
+    }
+    GetClassificationFromHits(hits, result, qualifiedRefSize) ;
   }
 
   const Taxonomy &GetTaxonomy() {
