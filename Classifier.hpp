@@ -487,7 +487,7 @@ private:
     for (k = 0 ; k <= 1 ; ++k) {
       for (auto & iter : seqIdStrandHitRecord[k]) {
         // Was any top taxonomy id in related validation species taxonomy id, added by Schaudge King
-        if (!_param.relatedTaxId.empty() && taxId == 0 && iter.second.hitLength * 2.68 >= result.queryLength) {
+        if (!_param.relatedTaxId.empty() && taxId == 0 && iter.second.hitLength >= minMatchLen) {
             taxId = _taxonomy.SeqIdToTaxId(iter.first);
             while (liftCnt < 4 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
                 taxId = _taxonomy.GetParentTid(taxId);
@@ -624,17 +624,17 @@ public:
   // Main function to return the classification results 
   void Query(char *r1, char *r2, struct _classifierResult &result) {
     result.Clear() ;
+    uint32_t qualifiedRefSize = strlen(r1) ;
+    if (r2 && strlen(r2) > qualifiedRefSize) qualifiedRefSize = strlen(r2) ;
 
     SimpleVector<struct _BWTHit> hits ;
     
     SearchForwardAndReverse(r1, r2, hits) ;
-    uint32_t qualifiedRefSize = strlen(r1) ;
-    if (r2) {
-        uint32_t r2len = strlen(r2) ;
-        result.queryLength += r2len;
-        if (r2len > qualifiedRefSize) qualifiedRefSize = r2len ;
-    }
+    result.queryLength += strlen(r1) ;
+    if (r2)
+        result.queryLength += strlen(r2) ;
     GetClassificationFromHits(hits, result, qualifiedRefSize) ;
+
   }
 
   const Taxonomy &GetTaxonomy() {
