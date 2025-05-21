@@ -301,7 +301,7 @@ private:
 
   //@return: the size of the hits after selecting the strand
   size_t SearchForwardAndReverse(char *r1, char *r2, SimpleVector<struct _BWTHit> &hits) {
-    int i, j, k ;
+    int i, k ;
     char *rcR1 = NULL ;
     char *rcR2 = NULL ;
     int r1len = strlen(r1) ;
