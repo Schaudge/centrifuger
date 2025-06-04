@@ -69,6 +69,17 @@ struct _BWTHit {
   }
 } ;
 
+// Each mismatch (snp or deletion) break point record
+struct _BWTBreak {
+    size_t sp, ep ; // [sp, ep] range on BWT for mismatch
+    size_t l ; // hit length for prefix
+    _BWTBreak(size_t isp, size_t iep, size_t il) {
+        sp = isp ;
+        ep = iep ;
+        l = il ;
+    }
+} ;
+
 class Classifier {
 
 private:
@@ -149,6 +160,51 @@ private:
     }
     return hits.Size() ;
   }
+
+    //@return: the number of excellent hits, whose mismatch (snp or indel) count is rather small! (Global specificity was qualified by MEM!)
+    size_t ExcellentHitsFromRead(char *r, size_t len, SimpleVector<struct _BWTHit> &hits) {
+        size_t sp = 0, ep = 0 ;
+        size_t backwardMatchLen = _fm.BackwardSearch(r, len, sp, ep) ;
+        if (backwardMatchLen + 1 >= len && sp <= ep) {  // perfect match, or match exclude the first base
+            struct _BWTHit nh(sp, ep, backwardMatchLen, len - backwardMatchLen, 0) ;
+            hits.PushBack(nh) ;
+        } else {
+            std::vector<struct _BWTBreak> breaks{_BWTBreak(sp, ep, backwardMatchLen)};
+            size_t breakIdx = 0, mismatch = 1 ;
+            while (backwardMatchLen < len && mismatch < 4) {  // < 4 mismatch (snp or indel) alignment by backward search
+                size_t breaksCount = breaks.size() ;
+                size_t _si = breakIdx ;
+                for ( ; _si < breaksCount ; ++_si) {  // travel through all previous break points
+                    for (int shift = 0 ; shift < 3 ; ++shift) {
+                        int singleTypeAdded = 0 ;  // match priority: snp > insertion > deletion
+                        for (const char base : "AGCT") {
+                            size_t _backwardMatchLen = breaks[_si].l ;
+                            if (shift > 1 || (shift == 1 && base == r[len - _backwardMatchLen - mismatch - 1]) || (shift < 1 && base > '@' && base != r[len - _backwardMatchLen - mismatch])) {
+                                size_t _sp = breaks[_si].sp, _ep = breaks[_si].ep ;
+                                if (_fm.BackwardOneBaseExtend(base, _sp, _ep) > 0) {
+                                    size_t joinedMatch = _backwardMatchLen + mismatch;
+                                    if (shift > 1) joinedMatch -= 1 ; else if (shift > 0) joinedMatch += 1 ;
+                                    _backwardMatchLen += _fm.KeepMatchPositionBackwardSearch(r, len - joinedMatch, _sp, _ep) ;
+                                    if (_backwardMatchLen + mismatch + 1 >= len && _sp <= _ep) {
+                                        backwardMatchLen = _backwardMatchLen + mismatch ;
+                                        struct _BWTHit nh(_sp, _ep, _backwardMatchLen, len - backwardMatchLen, 0) ;
+                                        hits.PushBack(nh) ;
+                                        singleTypeAdded = 1 ;
+                                    }
+                                }
+                                breaks.emplace_back(_sp, _ep, _backwardMatchLen) ;
+                            }
+                        }
+                        if (singleTypeAdded) break;
+                    }
+                }
+                breakIdx = breaksCount ;
+                mismatch += 1 ;
+            }
+        }
+
+        return hits.Size() ;
+    }
 
   // The hit search method has strand bias, so we shall use the other strand
   //   information to mitigate the bias. This is important if some strain's 
@@ -248,7 +304,7 @@ private:
     int i, k, ridx ;
     
     hits.Clear() ;
-    SimpleVector<struct _BWTHit> strandHits[2] ; // 0: minus strand, 1: postive strand
+    SimpleVector<struct _BWTHit> strandHits[2] ; // 0: minus strand, 1: positive strand
     
     for (ridx = 0 ; ridx <= 1 ; ++ridx) { //0-r1, 1-r2
       if (ridx == 1 && r2 == NULL)
@@ -353,6 +409,38 @@ private:
 
     return hits.Size() ;
   }
+
+    //@return: the size of the excellent hits
+    size_t excellentMatchSearch(char *r1, char *r2, SimpleVector<struct _BWTHit> &hits) {
+        size_t r1len = strlen(r1) ;
+        char *rcR1 = strdup(r1) ;
+        ReverseComplement(rcR1, r1len) ;
+
+        SimpleVector<struct _BWTHit> eachHits[2] ;  // 0: first end, 1: second (mate) end
+        ExcellentHitsFromRead(r1, r1len, eachHits[0]) ;
+        ExcellentHitsFromRead(rcR1, r1len, eachHits[0]) ;
+
+        if (r2 && strcmp(rcR1, r2) == 0 ) {  // mate pair is the same
+            hits.PushBack(eachHits[0]) ;
+        } else if (r2) {
+            char *rcR2 = strdup(r2) ;
+            size_t r2len = strlen(r2) ;
+            ReverseComplement(rcR2, r2len) ;
+            ExcellentHitsFromRead(r2, r2len, eachHits[1]) ;
+            ExcellentHitsFromRead(rcR2, r2len, eachHits[1]) ;
+            free(rcR2) ;
+
+            if (eachHits[0].Size() > 0 && eachHits[1].Size() > 0) {
+                hits = eachHits[0] ;
+                hits.PushBack(eachHits[1]) ;
+            }
+        } else if (eachHits[0].Size() > 0) {
+            hits = eachHits[0] ;
+        }
+
+        free(rcR1) ;
+        return hits.Size() ;
+    }
 
   size_t GetClassificationFromHits(const SimpleVector<struct _BWTHit> &hits, struct _classifierResult &result, uint32_t maxReadLength) {
     int i, k ;
@@ -551,6 +639,61 @@ private:
     }
     return result.taxIds.size() ;
   }
+
+    size_t ClassificationExcellentHits(const SimpleVector<struct _BWTHit> &hits, struct _classifierResult &result) {
+        int i;
+        size_t j ;
+        int hitCnt = hits.Size() ;
+        const size_t maxEntries = _param.maxResult * _param.maxResultPerHitFactor ;
+        std::map<size_t, int> localSeqIdHit ;
+
+        for (i = 0 ; i < hitCnt ; ++i) {
+            result.hitLength += hits[i].l ;
+
+            if (hits[i].ep - hits[i].sp + 1 <= maxEntries) {
+                for (j = hits[i].sp ; j <= hits[i].ep ; ++j) {
+                    size_t seqId = _fm.BackwardToSampledSA(j) ;
+#ifdef LI_DEBUG
+                    printf("%lu\n", _taxonomy.GetOrigTaxId( _taxonomy.SeqIdToTaxId(seqId) )) ;
+#endif
+                    localSeqIdHit[seqId] += 1 ;
+                }
+            } else {
+                // Since the first entry and last entry are likely to be more different
+                //   taxonomy-wisely, we shall search "bidirectionally" to make sure
+                //   both end is covered
+                size_t rangeSize = hits[i].ep - hits[i].sp + 1 ;
+                size_t step = DIV_CEIL(rangeSize, maxEntries) ;
+                size_t resolvedCnt = 0 ;
+                for (j = hits[i].sp ; j <= hits[i].ep ; j += step) {
+                    size_t seqId = _fm.BackwardToSampledSA(j) ;
+#ifdef LI_DEBUG
+                    printf("%lu\n", _taxonomy.GetOrigTaxId( _taxonomy.SeqIdToTaxId(seqId) )) ;
+#endif
+                    localSeqIdHit[seqId] += 1 ;
+                    ++resolvedCnt ;
+                }
+
+                for (j = hits[i].ep ; j >= hits[i].sp && j <= hits[i].ep ; j -= step) {
+                    size_t seqId = _fm.BackwardToSampledSA(j) ;
+#ifdef LI_DEBUG
+                    printf("%lu\n", _taxonomy.GetOrigTaxId( _taxonomy.SeqIdToTaxId(seqId) )) ;
+#endif
+                    localSeqIdHit[seqId] += 1 ;
+                    ++resolvedCnt ;
+                    if (resolvedCnt >= maxEntries)
+                        break ;
+                }
+            }
+        }
+
+        for (auto & iter : localSeqIdHit) {
+            result.seqStrNames.emplace_back( std::to_string(iter.second) ) ;
+            result.taxIds.emplace_back( _taxonomy.GetOrigTaxId(_taxonomy.SeqIdToTaxId(iter.first)) ) ;
+        }
+
+        return result.taxIds.size() ;
+    }
   
 public:
   Classifier() {
@@ -626,14 +769,19 @@ public:
     result.Clear() ;
     uint32_t qualifiedRefSize = strlen(r1) ;
     if (r2 && strlen(r2) > qualifiedRefSize) qualifiedRefSize = strlen(r2) ;
+    result.queryLength += strlen(r1) ;
+    if (r2) result.queryLength += strlen(r2) ;
 
     SimpleVector<struct _BWTHit> hits ;
-    
-    SearchForwardAndReverse(r1, r2, hits) ;
-    result.queryLength += strlen(r1) ;
-    if (r2)
-        result.queryLength += strlen(r2) ;
-    GetClassificationFromHits(hits, result, qualifiedRefSize) ;
+    if (_param.minMatchFraction > 1) {
+        excellentMatchSearch(r1, r2, hits) ;
+        ClassificationExcellentHits(hits, result) ;
+    } else {
+        SearchForwardAndReverse(r1, r2, hits) ;
+        GetClassificationFromHits(hits, result, qualifiedRefSize) ;
+    }
+
+
 
   }
 

@@ -156,17 +156,25 @@ public:
     if (matchCnt > 0)
     {
       ++_classifiedCnt ;
-      for (i = 0 ; i < matchCnt ; ++i)
-      {
-        fprintf(_fpClassification,
-            "%s\t%s\t%lu\t%lu\t%lu\t%lu\t%d\t%d\t%d",
-            readid, r.seqStrNames[i].c_str(), r.taxIds[i], r.relatedTaxId,
-            r.score, r.secondaryScore, r.hitLength, r.queryLength, matchCnt) ;
-        if (_hasBarcode)
-          PrintExtraCol(barcode) ;
-        if (_hasUmi)
-          PrintExtraCol(umi) ;
-        printf("\n") ;
+      if (r.score > 0) {  // Centrifuger raw output
+          for (i = 0 ; i < matchCnt ; ++i)
+          {
+              fprintf(_fpClassification,
+                      "%s\t%s\t%lu\t%lu\t%lu\t%lu\t%d\t%d\t%d",
+                      readid, r.seqStrNames[i].c_str(), r.taxIds[i], r.relatedTaxId,
+                      r.score, r.secondaryScore, r.hitLength, r.queryLength, matchCnt) ;
+              if (_hasBarcode)
+                  PrintExtraCol(barcode) ;
+              if (_hasUmi)
+                  PrintExtraCol(umi) ;
+              printf("\n") ;
+          }
+      } else {
+          fprintf(_fpClassification,"%s\t%d\t%d", readid, r.hitLength, r.queryLength) ;
+          fprintf(_fpClassification, "\t%lu,%s", r.taxIds[0], r.seqStrNames[0].c_str()) ;
+          for (i = 1 ; i < matchCnt ; ++i)
+              fprintf(_fpClassification, "|%lu,%s", r.taxIds[i], r.seqStrNames[i].c_str()) ;
+          printf("\n") ;
       }
     }
     else

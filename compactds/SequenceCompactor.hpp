@@ -17,7 +17,7 @@ private:
 public: 
   SequenceCompactor() 
   {
-    _capitalize = false ;
+    _capitalize = true ;
     _missingReplace = '\0' ;  
   };
 

@@ -8,7 +8,7 @@
 #include "FMBuilder.hpp"
 
 // Auxiliary data, other than the BWT and F (alphabet partial sum), for FM index
-// Should be directly initalized through FMBuilderParam, simplifies the parameter passing
+// Should be directly initialized through FMBuilderParam, simplifies the parameter passing
 namespace compactds {
 struct _FMIndexAuxData {
   size_t n ; // the length of the text
@@ -30,7 +30,7 @@ struct _FMIndexAuxData {
   WORD *semiLcpEqual ;
 
   size_t adjustedSA0 ;
-  std::map<size_t, size_t> selectedSA ; // SAs for speical purposes: e.g. boundary of genomes 
+  std::map<size_t, size_t> selectedSA ; // SAs for special purposes: e.g. boundary of genomes
   WORD *selectedSAFilter ; // Quick test whether a SA could be selectedSA 
   int selectedSAFilterSampleRate ;
 
@@ -318,7 +318,7 @@ public:
   }
 
   // m - length of s
-  // Return the [sp, ep] through the option, and the length of matched prefix in size_t
+  // Return the [sp, ep] through the option, and the length of matched postfix in size_t
   size_t BackwardSearch(char *s, size_t m, size_t &sp, size_t &ep) {
     size_t i ;
     if (m < _auxData.precomputeWidth)
@@ -347,7 +347,7 @@ public:
       ep = _n - 1 ;
     }
 
-    size_t l = _auxData.precomputeWidth ; 
+    size_t l = _auxData.precomputeWidth ;
     size_t nextSp = sp ;
     size_t nextEp = ep ;
     while (l < m) {
@@ -362,6 +362,38 @@ public:
     }
     return l ;
   }
+
+    // Return the [sp, ep] through the option, 1 for matched base
+    uint32_t BackwardOneBaseExtend(char snp, size_t &sp, size_t &ep) {
+        size_t nextSp = sp ;
+        size_t nextEp = ep ;
+        BackwardExtend(snp, sp, ep, nextSp, nextEp) ;
+        if ( nextSp > nextEp || nextEp > _n)
+            return 0 ;
+        sp = nextSp ;
+        ep = nextEp ;
+        return 1 ;
+    }
+
+    // m - length of s
+    // Return the [sp, ep] through the option, and the length of matched postfix in size_t
+    size_t KeepMatchPositionBackwardSearch(char *s, size_t m, size_t &sp, size_t &ep) {
+        size_t l = 0;
+        size_t nextSp = sp ;
+        size_t nextEp = ep ;
+        while (l < m) {
+            if (!_alphabets.IsIn(s[m - 1 - l]))
+                break ;
+            BackwardExtend(s[m - 1 - l], sp, ep, nextSp, nextEp) ;
+            if ( nextSp > nextEp || nextEp > _n)
+                break ;
+            sp = nextSp ;
+            ep = nextEp ;
+            ++l ;
+        }
+        return l ;
+    }
+
 
   // @return: the value of the sampled SA for BWT[i]
   size_t BackwardToSampledSA(size_t i) {

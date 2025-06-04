@@ -78,8 +78,7 @@ class ReadFiles
     void RemoveReadIdSuffix(char *id)
     {
       int len = strlen( id ) ;
-      if ( ( id[len - 1] == '1' || id[len - 1] == '2' )
-          && id[len - 2] == '/' )
+      if ( ( id[len - 1] == '1' || id[len - 1] == '2' ) && id[len - 2] == '/' )
       {
         id[len - 2] = '\0' ;
       }
