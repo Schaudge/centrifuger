@@ -72,11 +72,12 @@ struct _BWTHit {
 // Each mismatch (snp or deletion) break point record
 struct _BWTBreak {
     size_t sp, ep ; // [sp, ep] range on BWT for mismatch
-    size_t l ; // hit length for prefix
-    _BWTBreak(size_t isp, size_t iep, size_t il) {
+    size_t len, skip ; // hit (matched) length for postfix, skipped base count for postfix
+    _BWTBreak(size_t isp, size_t iep, size_t ilen, size_t iskip) {
         sp = isp ;
         ep = iep ;
-        l = il ;
+        len = ilen ;
+        skip = iskip ;
     }
 } ;
 
@@ -169,33 +170,32 @@ private:
             struct _BWTHit nh(sp, ep, backwardMatchLen, len - backwardMatchLen, 0) ;
             hits.PushBack(nh) ;
         } else {
-            std::vector<struct _BWTBreak> breaks{_BWTBreak(sp, ep, backwardMatchLen)};
+            std::vector<struct _BWTBreak> breaks{_BWTBreak(sp, ep, backwardMatchLen, 1)};
             size_t breakIdx = 0, mismatch = 1 ;
             while (backwardMatchLen < len && mismatch < 4) {  // < 4 mismatch (snp or indel) alignment by backward search
-                size_t breaksCount = breaks.size() ;
-                size_t _si = breakIdx ;
+                size_t _si = breakIdx, breaksCount = breaks.size() ;
                 for ( ; _si < breaksCount ; ++_si) {  // travel through all previous break points
-                    for (int shift = 0 ; shift < 3 ; ++shift) {
-                        int singleTypeAdded = 0 ;  // match priority: snp > insertion > deletion
+                    for (int shift = 0 ; shift < 3 ; ++shift) {  // match priority: snp (shift = 0) > insertion (shift = 1) > deletion (shift = 2)
+                        int typeLevelControl = 0 ;
                         for (const char base : "AGCT") {
-                            size_t _backwardMatchLen = breaks[_si].l ;
-                            if (shift > 1 || (shift == 1 && base == r[len - _backwardMatchLen - mismatch - 1]) || (shift < 1 && base > '@' && base != r[len - _backwardMatchLen - mismatch])) {
+                            size_t _backwardMatchLen = breaks[_si].len ;
+                            size_t skip = (shift < 1) ? breaks[_si].skip : (shift < 2 ? breaks[_si].skip + 1 : breaks[_si].skip - 1) ;
+                            size_t joined = _backwardMatchLen + skip ;
+                            if (shift > 1 && base > '@' || (shift == 1 && base == r[len - joined]) || (shift < 1 && base > '@' && base != r[len - joined])) {
                                 size_t _sp = breaks[_si].sp, _ep = breaks[_si].ep ;
                                 if (_fm.BackwardOneBaseExtend(base, _sp, _ep) > 0) {
-                                    size_t joinedMatch = _backwardMatchLen + mismatch;
-                                    if (shift > 1) joinedMatch -= 1 ; else if (shift > 0) joinedMatch += 1 ;
-                                    _backwardMatchLen += _fm.KeepMatchPositionBackwardSearch(r, len - joinedMatch, _sp, _ep) ;
-                                    if (_backwardMatchLen + mismatch + 1 >= len && _sp <= _ep) {
-                                        backwardMatchLen = _backwardMatchLen + mismatch ;
+                                    _backwardMatchLen += _fm.KeepMatchPositionBackwardSearch(r, len - joined, _sp, _ep) ;
+                                    if (_backwardMatchLen + skip + 1 >= len && _sp <= _ep) {
+                                        backwardMatchLen = _backwardMatchLen + skip ;
                                         struct _BWTHit nh(_sp, _ep, _backwardMatchLen, len - backwardMatchLen, 0) ;
                                         hits.PushBack(nh) ;
-                                        singleTypeAdded = 1 ;
+                                        typeLevelControl = 1 ;
                                     }
                                 }
-                                breaks.emplace_back(_sp, _ep, _backwardMatchLen) ;
+                                breaks.emplace_back(_sp, _ep, _backwardMatchLen, skip) ;
                             }
                         }
-                        if (singleTypeAdded) break;
+                        if (typeLevelControl) break;
                     }
                 }
                 breakIdx = breaksCount ;
