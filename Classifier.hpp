@@ -21,7 +21,7 @@ struct _classifierParam {
   std::map<size_t, int> relatedTaxId ;
   _classifierParam() {
     maxResult = 1 ;
-    minHitLen = 3 ;
+    minHitLen = 13 ;
     minMatchFraction = 0.5;
     maxResultPerHitFactor = 40 ;
     relatedTaxId.clear() ;
@@ -170,21 +170,23 @@ private:
             struct _BWTHit nh(sp, ep, backwardMatchLen, len - backwardMatchLen, 0) ;
             hits.PushBack(nh) ;
         } else {
-            std::vector<struct _BWTBreak> breaks{_BWTBreak(sp, ep, backwardMatchLen, 1)};
-            size_t breakIdx = 0, mismatch = 1 ;
+            std::vector<_BWTBreak> breaks{_BWTBreak(sp, ep, backwardMatchLen, 1)} ;
+            breaks.reserve(120) ;
+            size_t breakIdx = 0, mismatch = 1, current_mm = backwardMatchLen ;
             while (backwardMatchLen < len && mismatch < 4) {  // < 4 mismatch (snp or indel) alignment by backward search
                 size_t _si = breakIdx, breaksCount = breaks.size() ;
+                if (mismatch > 1 && current_mm * 3 < len) break ;
                 for ( ; _si < breaksCount ; ++_si) {  // travel through all previous break points
                     for (int shift = 0 ; shift < 3 ; ++shift) {  // match priority: snp (shift = 0) > insertion (shift = 1) > deletion (shift = 2)
                         int typeLevelControl = 0 ;
                         for (const char base : "AGCT") {
                             size_t _backwardMatchLen = breaks[_si].len ;
                             size_t skip = (shift < 1) ? breaks[_si].skip : (shift < 2 ? breaks[_si].skip + 1 : breaks[_si].skip - 1) ;
-                            size_t joined = _backwardMatchLen + skip ;
-                            if (shift > 1 && base > '@' || (shift == 1 && base == r[len - joined]) || (shift < 1 && base > '@' && base != r[len - joined])) {
+                            size_t join = _backwardMatchLen + skip ;
+                            if (shift > 1 && base > '@' || (shift == 1 && base == r[len - join]) || (shift < 1 && base > '@' && base != r[len - join])) {
                                 size_t _sp = breaks[_si].sp, _ep = breaks[_si].ep ;
                                 if (_fm.BackwardOneBaseExtend(base, _sp, _ep) > 0) {
-                                    _backwardMatchLen += _fm.KeepMatchPositionBackwardSearch(r, len - joined, _sp, _ep) ;
+                                    _backwardMatchLen += _fm.KeepMatchPositionBackwardSearch(r, len - join, _sp, _ep) ;
                                     if (_backwardMatchLen + skip + 1 >= len && _sp <= _ep) {
                                         backwardMatchLen = _backwardMatchLen + skip ;
                                         struct _BWTHit nh(_sp, _ep, _backwardMatchLen, len - backwardMatchLen, 0) ;
@@ -192,6 +194,7 @@ private:
                                         typeLevelControl = 1 ;
                                     }
                                 }
+                                if (_backwardMatchLen > current_mm) current_mm = _backwardMatchLen ;
                                 breaks.emplace_back(_sp, _ep, _backwardMatchLen, skip) ;
                             }
                         }
@@ -417,8 +420,11 @@ private:
         ReverseComplement(rcR1, r1len) ;
 
         SimpleVector<struct _BWTHit> eachHits[2] ;  // 0: first end, 1: second (mate) end
-        ExcellentHitsFromRead(r1, r1len, eachHits[0]) ;
-        ExcellentHitsFromRead(rcR1, r1len, eachHits[0]) ;
+        for (int shrinkage = 0 ;  shrinkage < 4 ; ++shrinkage) {  // TODO: more optimal guarantee ?
+            const auto hit1 = ExcellentHitsFromRead(r1, r1len - shrinkage, eachHits[0]) ;
+            const auto rcHit1 = ExcellentHitsFromRead(rcR1, r1len - shrinkage, eachHits[0]) ;
+            if (hit1 || rcHit1) break ;
+        }
 
         if (r2 && strcmp(rcR1, r2) == 0 ) {  // mate pair is the same
             hits.PushBack(eachHits[0]) ;
@@ -426,8 +432,11 @@ private:
             char *rcR2 = strdup(r2) ;
             size_t r2len = strlen(r2) ;
             ReverseComplement(rcR2, r2len) ;
-            ExcellentHitsFromRead(r2, r2len, eachHits[1]) ;
-            ExcellentHitsFromRead(rcR2, r2len, eachHits[1]) ;
+            for (int shrinkage = 0 ;  shrinkage < 4 ; ++shrinkage) {
+                const auto hit2 = ExcellentHitsFromRead(r2, r2len - shrinkage, eachHits[1]) ;
+                const auto rcHit2 = ExcellentHitsFromRead(rcR2, r2len - shrinkage, eachHits[1]) ;
+                if (hit2 || rcHit2) break ;
+            }
             free(rcR2) ;
 
             if (eachHits[0].Size() > 0 && eachHits[1].Size() > 0) {
