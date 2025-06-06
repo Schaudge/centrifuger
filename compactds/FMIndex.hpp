@@ -296,8 +296,8 @@ public:
     return ret ;
   }
 
-  void BackwardExtend(ALPHABET c, size_t sp, size_t ep, size_t &nextSp, size_t &nextEp) {
-    size_t offset = _plainAlphabetPartialSum[ _plainAlphabetCoder.Encode(c) ] ; 
+  void BackwardExtend(ALPHABET c, const size_t sp, size_t ep, size_t &nextSp, size_t &nextEp) {
+    const size_t offset = _plainAlphabetPartialSum[ _plainAlphabetCoder.Encode(c) ] ;
     //printf("%c: %d %d %d. %d %d\n", c, offset, sp, ep, _BWT.Rank(c, sp, 0),
     //    _BWT.Rank(c, ep)) ;
     // Need minus 1 here because the return of Rank is 1-based.
@@ -312,14 +312,14 @@ public:
   }
 
   // This one is essentially LF mapping 
-  size_t BackwardExtend(ALPHABET c, size_t p) {
-    size_t offset = _plainAlphabetPartialSum[ _plainAlphabetCoder.Encode(c) ] ;
+  size_t BackwardExtend(const ALPHABET c, const size_t p) {
+    const size_t offset = _plainAlphabetPartialSum[ _plainAlphabetCoder.Encode(c) ] ;
     return offset + Rank(c, p) - 1 ;
   }
 
   // m - length of s
   // Return the [sp, ep] through the option, and the length of matched postfix in size_t
-  size_t BackwardSearch(char *s, size_t m, size_t &sp, size_t &ep) {
+  size_t BackwardSearch(const char *s, const size_t m, size_t &sp, size_t &ep) {
     size_t i ;
     if (m < _auxData.precomputeWidth)
       return 0 ;
@@ -364,10 +364,10 @@ public:
   }
 
     // Return the [sp, ep] through the option, 1 for matched base
-    uint32_t BackwardOneBaseExtend(char snp, size_t &sp, size_t &ep) {
+    uint32_t BackwardOneBaseExtend(const char base, size_t &sp, size_t &ep) {
         size_t nextSp = sp ;
         size_t nextEp = ep ;
-        BackwardExtend(snp, sp, ep, nextSp, nextEp) ;
+        BackwardExtend(base, sp, ep, nextSp, nextEp) ;
         if ( nextSp > nextEp || nextEp > _n)
             return 0 ;
         sp = nextSp ;
@@ -377,7 +377,7 @@ public:
 
     // m - length of s
     // Return the [sp, ep] through the option, and the length of matched postfix in size_t
-    size_t KeepMatchPositionBackwardSearch(char *s, size_t m, size_t &sp, size_t &ep) {
+    size_t KeepMatchPositionBackwardSearch(const char *s, const size_t m, size_t &sp, size_t &ep) {
         size_t l = 0;
         size_t nextSp = sp ;
         size_t nextEp = ep ;

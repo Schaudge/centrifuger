@@ -171,7 +171,7 @@ private:
             hits.PushBack(nh) ;
         } else {
             std::vector<_BWTBreak> breaks{_BWTBreak(sp, ep, backwardMatchLen, 0)} ;
-            breaks.reserve(120) ;
+            breaks.reserve(320) ;
             size_t breakIdx = 0, mismatch = 1, current_mm = backwardMatchLen ;
             while (backwardMatchLen < end && mismatch + discard < 4) {  // < 4 mismatch (snp or indel) alignment by backward search
                 size_t _si = breakIdx, breaksCount = breaks.size() ;
@@ -200,15 +200,15 @@ private:
                         }
                         if (typeLevelControl) break;
                     }
-                    // some excellent match may occur before maximum exact match (MEM) break point
-                    if (hits.Size() < 1 && mismatch + discard < 2) {
-                        for (int i = 5 ; i < breaks[_si].len ; ++i) {
-                            for (int shift = 1 ; shift < 4 ; ++shift) {  // match priority: snp (shift = 1) > insertion (shift = 2) > deletion (shift = 3)
+                    // an excellent alignment may occur before the maximum exact match (MEM) break point
+                    if (hits.Size() < 1 && mismatch + discard < 2) {  // current search only once
+                        for (int _tr = 3 ; _tr < breaks[_si].len ; ++_tr) {  // mem truncation
+                             for (int shift = 1 ; shift < 4 ; ++shift) {  // match priority: snp (shift = 1) > insertion (shift = 2) > deletion (shift = 3)
                                 int typeLevelControl = 0 ;
                                 for (const char base : "AGCT") {
-                                    size_t _backwardMatchLen = breaks[_si].len ;
+                                    size_t _backwardMatchLen = _tr ;
                                     size_t skip = breaks[_si].skip + (shift < 3 ? shift : 0) ;
-                                    size_t _pos = end - i - skip ;
+                                    const size_t _pos = end - _tr - skip ;
                                     if (shift > 2 && base > '@' || (shift == 2 && base == r[_pos]) || (shift < 2 && base > '@' && base != r[_pos])) {
                                         size_t _sp = breaks[_si].sp, _ep = breaks[_si].ep ;
                                         if (_fm.BackwardOneBaseExtend(base, _sp, _ep) > 0) {
@@ -451,14 +451,11 @@ private:
         SimpleVector<struct _BWTHit> eachHits[2] ;  // 0: first end, 1: second (mate) end
         for (int shrinkage = 0 ;  shrinkage < 3 ; ++shrinkage) {  // TODO: more optimal guarantee ?
             hit1 = ExcellentHitsFromRead(r1, r1len, shrinkage, eachHits[0]) ;
-            if (hit1) break ;
-            else {
-                rcHit1 = ExcellentHitsFromRead(rcR1, r1len, shrinkage, eachHits[0]) ;
-                if (rcHit1) break ;
-            }
+            rcHit1 = ExcellentHitsFromRead(rcR1, r1len, shrinkage, eachHits[0]) ;
+            if (hit1 || rcHit1) break ;
         }
 
-        if (r2 && (hit1 || rcHit1) && strcmp(rcR1, r2) == 0) {  // mate pair is the same
+        if (r2 && (hit1 || rcHit1) && strcmp(rcR1, r2) == 0) {  // mate pair is same
             hits.PushBack(eachHits[0]) ;
         } else if (r2 && (hit1 || rcHit1)) {
             char *rcR2 = strdup(r2) ;
@@ -468,7 +465,7 @@ private:
             for (int shrinkage = 0 ;  shrinkage < 3 ; ++shrinkage) {
                 if (rcHit1)
                     hit2 = ExcellentHitsFromRead(r2, r2len, shrinkage, eachHits[1]) ;
-                else
+                if (hit1)
                     rcHit2 = ExcellentHitsFromRead(rcR2, r2len, shrinkage, eachHits[1]) ;
                 if (hit2 || rcHit2) break ;
             }
