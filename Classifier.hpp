@@ -163,33 +163,33 @@ private:
   }
 
     //@return: the number of excellent hits, whose mismatch (snp or indel) count is rather small! (Global specificity was qualified by MEM!)
-    size_t ExcellentHitsFromRead(char *r, size_t len, SimpleVector<struct _BWTHit> &hits) {
-        size_t sp = 0, ep = 0 ;
-        size_t backwardMatchLen = _fm.BackwardSearch(r, len, sp, ep) ;
-        if (backwardMatchLen + 1 >= len && sp <= ep) {  // perfect match, or match exclude the first base
-            struct _BWTHit nh(sp, ep, backwardMatchLen, len - backwardMatchLen, 0) ;
+    size_t ExcellentHitsFromRead(char *r, size_t len, size_t discard, SimpleVector<struct _BWTHit> &hits) {
+        size_t sp = 0, ep = 0, end = len - discard ;
+        size_t backwardMatchLen = _fm.BackwardSearch(r, end, sp, ep) ;
+        if (backwardMatchLen + 1 >= end && sp <= ep) {  // perfect match, or match exclude the first base
+            struct _BWTHit nh(sp, ep, backwardMatchLen, end - backwardMatchLen, 0) ;
             hits.PushBack(nh) ;
         } else {
-            std::vector<_BWTBreak> breaks{_BWTBreak(sp, ep, backwardMatchLen, 1)} ;
+            std::vector<_BWTBreak> breaks{_BWTBreak(sp, ep, backwardMatchLen, 0)} ;
             breaks.reserve(120) ;
             size_t breakIdx = 0, mismatch = 1, current_mm = backwardMatchLen ;
-            while (backwardMatchLen < len && mismatch < 4) {  // < 4 mismatch (snp or indel) alignment by backward search
+            while (backwardMatchLen < end && mismatch + discard < 4) {  // < 4 mismatch (snp or indel) alignment by backward search
                 size_t _si = breakIdx, breaksCount = breaks.size() ;
-                if (mismatch > 1 && current_mm * 3 < len) break ;
+                if (mismatch > 2 && current_mm * 2 < end) break ;
                 for ( ; _si < breaksCount ; ++_si) {  // travel through all previous break points
-                    for (int shift = 0 ; shift < 3 ; ++shift) {  // match priority: snp (shift = 0) > insertion (shift = 1) > deletion (shift = 2)
+                    for (int shift = 1 ; shift < 4 ; ++shift) {  // match priority: snp (shift = 1) > insertion (shift = 2) > deletion (shift = 3)
                         int typeLevelControl = 0 ;
                         for (const char base : "AGCT") {
                             size_t _backwardMatchLen = breaks[_si].len ;
-                            size_t skip = (shift < 1) ? breaks[_si].skip : (shift < 2 ? breaks[_si].skip + 1 : breaks[_si].skip - 1) ;
-                            size_t join = _backwardMatchLen + skip ;
-                            if (shift > 1 && base > '@' || (shift == 1 && base == r[len - join]) || (shift < 1 && base > '@' && base != r[len - join])) {
+                            size_t skip = breaks[_si].skip + (shift < 3 ? shift : 0) ;
+                            size_t _pos = end - _backwardMatchLen - skip ;
+                            if (shift > 2 && base > '@' || (shift == 2 && base == r[_pos]) || (shift < 2 && base > '@' && base != r[_pos])) {
                                 size_t _sp = breaks[_si].sp, _ep = breaks[_si].ep ;
                                 if (_fm.BackwardOneBaseExtend(base, _sp, _ep) > 0) {
-                                    _backwardMatchLen += _fm.KeepMatchPositionBackwardSearch(r, len - join, _sp, _ep) ;
-                                    if (_backwardMatchLen + skip + 1 >= len && _sp <= _ep) {
+                                    _backwardMatchLen += _fm.KeepMatchPositionBackwardSearch(r, _pos, _sp, _ep) ;
+                                    if (_backwardMatchLen + skip >= end && _sp <= _ep) {
                                         backwardMatchLen = _backwardMatchLen + skip ;
-                                        struct _BWTHit nh(_sp, _ep, _backwardMatchLen, len - backwardMatchLen, 0) ;
+                                        struct _BWTHit nh(_sp, _ep, _backwardMatchLen, end - backwardMatchLen, 0) ;
                                         hits.PushBack(nh) ;
                                         typeLevelControl = 1 ;
                                     }
@@ -199,6 +199,34 @@ private:
                             }
                         }
                         if (typeLevelControl) break;
+                    }
+                    // some excellent match may occur before maximum exact match (MEM) break point
+                    if (hits.Size() < 1 && mismatch + discard < 2) {
+                        for (int i = 5 ; i < breaks[_si].len ; ++i) {
+                            for (int shift = 1 ; shift < 4 ; ++shift) {  // match priority: snp (shift = 1) > insertion (shift = 2) > deletion (shift = 3)
+                                int typeLevelControl = 0 ;
+                                for (const char base : "AGCT") {
+                                    size_t _backwardMatchLen = breaks[_si].len ;
+                                    size_t skip = breaks[_si].skip + (shift < 3 ? shift : 0) ;
+                                    size_t _pos = end - i - skip ;
+                                    if (shift > 2 && base > '@' || (shift == 2 && base == r[_pos]) || (shift < 2 && base > '@' && base != r[_pos])) {
+                                        size_t _sp = breaks[_si].sp, _ep = breaks[_si].ep ;
+                                        if (_fm.BackwardOneBaseExtend(base, _sp, _ep) > 0) {
+                                            _backwardMatchLen += _fm.KeepMatchPositionBackwardSearch(r, _pos, _sp, _ep) ;
+                                            if (_backwardMatchLen + skip >= end && _sp <= _ep) {
+                                                backwardMatchLen = _backwardMatchLen + skip ;
+                                                struct _BWTHit nh(_sp, _ep, _backwardMatchLen, end - backwardMatchLen, 0) ;
+                                                hits.PushBack(nh) ;
+                                                typeLevelControl = 1 ;
+                                            }
+                                        }
+                                        if (_backwardMatchLen > current_mm) current_mm = _backwardMatchLen ;
+                                        breaks.emplace_back(_sp, _ep, _backwardMatchLen, skip) ;
+                                    }
+                                }
+                                if (typeLevelControl) break;
+                            }
+                        }
                     }
                 }
                 breakIdx = breaksCount ;
@@ -419,22 +447,29 @@ private:
         char *rcR1 = strdup(r1) ;
         ReverseComplement(rcR1, r1len) ;
 
+        size_t hit1 = 0, rcHit1 = 0 ;
         SimpleVector<struct _BWTHit> eachHits[2] ;  // 0: first end, 1: second (mate) end
-        for (int shrinkage = 0 ;  shrinkage < 4 ; ++shrinkage) {  // TODO: more optimal guarantee ?
-            const auto hit1 = ExcellentHitsFromRead(r1, r1len - shrinkage, eachHits[0]) ;
-            const auto rcHit1 = ExcellentHitsFromRead(rcR1, r1len - shrinkage, eachHits[0]) ;
-            if (hit1 || rcHit1) break ;
+        for (int shrinkage = 0 ;  shrinkage < 3 ; ++shrinkage) {  // TODO: more optimal guarantee ?
+            hit1 = ExcellentHitsFromRead(r1, r1len, shrinkage, eachHits[0]) ;
+            if (hit1) break ;
+            else {
+                rcHit1 = ExcellentHitsFromRead(rcR1, r1len, shrinkage, eachHits[0]) ;
+                if (rcHit1) break ;
+            }
         }
 
-        if (r2 && strcmp(rcR1, r2) == 0 ) {  // mate pair is the same
+        if (r2 && (hit1 || rcHit1) && strcmp(rcR1, r2) == 0) {  // mate pair is the same
             hits.PushBack(eachHits[0]) ;
-        } else if (r2) {
+        } else if (r2 && (hit1 || rcHit1)) {
             char *rcR2 = strdup(r2) ;
             size_t r2len = strlen(r2) ;
             ReverseComplement(rcR2, r2len) ;
-            for (int shrinkage = 0 ;  shrinkage < 4 ; ++shrinkage) {
-                const auto hit2 = ExcellentHitsFromRead(r2, r2len - shrinkage, eachHits[1]) ;
-                const auto rcHit2 = ExcellentHitsFromRead(rcR2, r2len - shrinkage, eachHits[1]) ;
+            size_t hit2 = 0, rcHit2 = 0 ;
+            for (int shrinkage = 0 ;  shrinkage < 3 ; ++shrinkage) {
+                if (rcHit1)
+                    hit2 = ExcellentHitsFromRead(r2, r2len, shrinkage, eachHits[1]) ;
+                else
+                    rcHit2 = ExcellentHitsFromRead(rcR2, r2len, shrinkage, eachHits[1]) ;
                 if (hit2 || rcHit2) break ;
             }
             free(rcR2) ;
@@ -443,7 +478,7 @@ private:
                 hits = eachHits[0] ;
                 hits.PushBack(eachHits[1]) ;
             }
-        } else if (eachHits[0].Size() > 0) {
+        } else if (hit1 || rcHit1) {
             hits = eachHits[0] ;
         }
 
