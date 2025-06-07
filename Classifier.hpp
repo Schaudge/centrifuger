@@ -163,7 +163,7 @@ private:
   }
 
     //@return: the number of excellent hits, whose mismatch (snp or indel) count is rather small! (Global specificity was qualified by MEM!)
-    size_t ExcellentHitsFromRead(char *r, size_t len, size_t discard, SimpleVector<struct _BWTHit> &hits) {
+    size_t ExcellentHitsFromRead(const char *r, const size_t len, const size_t discard, SimpleVector<struct _BWTHit> &hits) {
         size_t sp = 0, ep = 0, end = len - discard ;
         size_t backwardMatchLen = _fm.BackwardSearch(r, end, sp, ep) ;
         if (backwardMatchLen + 1 >= end && sp <= ep) {  // perfect match, or match exclude the first base
@@ -186,7 +186,7 @@ private:
                             if (shift > 2 && base > '@' || (shift == 2 && base == r[_pos]) || (shift < 2 && base > '@' && base != r[_pos])) {
                                 size_t _sp = breaks[_si].sp, _ep = breaks[_si].ep ;
                                 if (_fm.BackwardOneBaseExtend(base, _sp, _ep) > 0) {
-                                    _backwardMatchLen += _fm.KeepMatchPositionBackwardSearch(r, _pos, _sp, _ep) ;
+                                    _backwardMatchLen += _fm.PreRangeKeptBackwardSearch(r, _pos, _sp, _ep) ;
                                     if (_backwardMatchLen + skip >= end && _sp <= _ep) {
                                         backwardMatchLen = _backwardMatchLen + skip ;
                                         struct _BWTHit nh(_sp, _ep, _backwardMatchLen, end - backwardMatchLen, 0) ;
@@ -201,18 +201,21 @@ private:
                         if (typeLevelControl) break;
                     }
                     // an excellent alignment may occur before the maximum exact match (MEM) break point
-                    if (hits.Size() < 1 && mismatch + discard < 2) {  // current search only once
+                    if (hits.Size() < 1 && breaks[_si].len > 5 && mismatch + discard < 2) {  // current search only once
+                        size_t tr_sp = 1, tr_ep = 0 ;
+                        _fm.SmallMatchedBackwardExtend(r, end - 1, end - 3, tr_sp, tr_ep) ;
                         for (int _tr = 3 ; _tr < breaks[_si].len ; ++_tr) {  // mem truncation
-                             for (int shift = 1 ; shift < 4 ; ++shift) {  // match priority: snp (shift = 1) > insertion (shift = 2) > deletion (shift = 3)
+                            _fm.BackwardOneBaseExtend(r[end - _tr], tr_sp, tr_ep) ;
+                            for (int shift = 1 ; shift < 4 ; ++shift) {  // match priority: snp (shift = 1) > insertion (shift = 2) > deletion (shift = 3)
                                 int typeLevelControl = 0 ;
                                 for (const char base : "AGCT") {
                                     size_t _backwardMatchLen = _tr ;
-                                    size_t skip = breaks[_si].skip + (shift < 3 ? shift : 0) ;
+                                    const size_t skip = breaks[_si].skip + (shift < 3 ? shift : 0) ;
                                     const size_t _pos = end - _tr - skip ;
                                     if (shift > 2 && base > '@' || (shift == 2 && base == r[_pos]) || (shift < 2 && base > '@' && base != r[_pos])) {
-                                        size_t _sp = breaks[_si].sp, _ep = breaks[_si].ep ;
+                                        size_t _sp = tr_sp, _ep = tr_ep ;
                                         if (_fm.BackwardOneBaseExtend(base, _sp, _ep) > 0) {
-                                            _backwardMatchLen += _fm.KeepMatchPositionBackwardSearch(r, _pos, _sp, _ep) ;
+                                            _backwardMatchLen += _fm.PreRangeKeptBackwardSearch(r, _pos, _sp, _ep) ;
                                             if (_backwardMatchLen + skip >= end && _sp <= _ep) {
                                                 backwardMatchLen = _backwardMatchLen + skip ;
                                                 struct _BWTHit nh(_sp, _ep, _backwardMatchLen, end - backwardMatchLen, 0) ;
@@ -221,7 +224,6 @@ private:
                                             }
                                         }
                                         if (_backwardMatchLen > current_mm) current_mm = _backwardMatchLen ;
-                                        breaks.emplace_back(_sp, _ep, _backwardMatchLen, skip) ;
                                     }
                                 }
                                 if (typeLevelControl) break;

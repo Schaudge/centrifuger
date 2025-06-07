@@ -375,9 +375,22 @@ public:
         return 1 ;
     }
 
+    // Return the [sp, ep] through the option
+    int SmallMatchedBackwardExtend(const char *s, const size_t ls, const size_t le, size_t &sp, size_t &ep) {
+        sp = 0 ;
+        ep = _n - 1 ;
+        for (auto i = ls ; i > le ; --i) {
+            size_t nextSp = sp, nextEp = ep ;
+            BackwardExtend(s[i], sp, ep, nextSp, nextEp) ;
+            if ( nextSp > nextEp || nextEp > _n) return 0 ;
+            sp = nextSp, ep = nextEp ;
+        }
+        return 1;
+    }
+
     // m - length of s
     // Return the [sp, ep] through the option, and the length of matched postfix in size_t
-    size_t KeepMatchPositionBackwardSearch(const char *s, const size_t m, size_t &sp, size_t &ep) {
+    size_t PreRangeKeptBackwardSearch(const char *s, const size_t m, size_t &sp, size_t &ep) {
         size_t l = 0;
         size_t nextSp = sp ;
         size_t nextEp = ep ;
@@ -393,7 +406,6 @@ public:
         }
         return l ;
     }
-
 
   // @return: the value of the sampled SA for BWT[i]
   size_t BackwardToSampledSA(size_t i) {
