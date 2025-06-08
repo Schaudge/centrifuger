@@ -195,13 +195,13 @@ private:
                                     }
                                 }
                                 if (_backwardMatchLen > current_mm) current_mm = _backwardMatchLen ;
-                                breaks.emplace_back(_sp, _ep, _backwardMatchLen, skip) ;
+                                if (_backwardMatchLen > breaks[_si].len) breaks.emplace_back(_sp, _ep, _backwardMatchLen, skip) ;
                             }
                         }
                         if (typeLevelControl) break;
                     }
                     // an excellent alignment may occur before the maximum exact match (MEM) break point
-                    if (hits.Size() < 1 && breaks[_si].len > 5 && mismatch + discard < 2) {  // current search only once
+                    if (hits.Size() < 1 && breaks[_si].len > 5 && mismatch + discard < 3) {
                         size_t tr_sp = 1, tr_ep = 0 ;
                         _fm.SmallMatchedBackwardExtend(r, end - 1, end - 3, tr_sp, tr_ep) ;
                         for (int _tr = 3 ; _tr < breaks[_si].len ; ++_tr) {  // mem truncation
@@ -224,6 +224,7 @@ private:
                                             }
                                         }
                                         if (_backwardMatchLen > current_mm) current_mm = _backwardMatchLen ;
+                                        if (_backwardMatchLen > breaks[_si].len) breaks.emplace_back(_sp, _ep, _backwardMatchLen, skip) ;
                                     }
                                 }
                                 if (typeLevelControl) break;
