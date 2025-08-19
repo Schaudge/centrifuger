@@ -39,6 +39,10 @@ class ReadFiles
     
     bool opened ;
 
+    std::string specialReadId ;
+    bool addSpecialReadForFileEnd ; 
+    int fileEndSpecialReadFlag ; // flag:0 hasn't output the special read yet, 1 already output the speical read, so should move to the next file.
+
     void GetFileBaseName(const char *in, char *out ) 
     {
       int i, j, k ;
@@ -93,6 +97,7 @@ class ReadFiles
     {
       needComment = false ;
       id = comment = seq = qual = NULL ;
+      addSpecialReadForFileEnd = false ;
     }
 
     ~ReadFiles()
@@ -126,7 +131,7 @@ class ReadFiles
     }
 
     // interleaved file is not frequently set
-    void AddReadFile(char *file, bool fileHasMate, int fileInterleaved = false)
+    void AddReadFile(const char *file, bool fileHasMate, int fileInterleaved = false)
     {
       //std::string s(file) ;
       unsigned int i ;
@@ -185,6 +190,13 @@ class ReadFiles
 
       OpenFile(0) ;
     }
+
+    void SetSpecialReadToMarkFileEnd(const char *readId)
+    {
+      addSpecialReadForFileEnd = true ;
+      specialReadId = readId ;
+      fileEndSpecialReadFlag = 0 ;
+    }
     
     bool HasMate()
     {
@@ -202,6 +214,21 @@ class ReadFiles
       //char buffer[2048] ;
       while ( currentFpInd < fileCnt && ( kseq_read( inSeq ) < 0 ) )
       {
+        if (addSpecialReadForFileEnd)
+        {
+          if (fileEndSpecialReadFlag == 0)
+          {
+            if ( id != NULL )	
+              free( id ) ; 
+            id = strdup(specialReadId.c_str()) ;
+            if (seq != NULL)
+              seq[0] = '\0' ;
+            fileEndSpecialReadFlag = 1 ;
+            return 1 ;
+          }
+          else
+            fileEndSpecialReadFlag = 0 ;
+        }
         ++currentFpInd ;
         if (currentFpInd < fileCnt)
           OpenFile(currentFpInd) ;
@@ -244,6 +271,24 @@ class ReadFiles
       //char buffer[2048] ;
       while ( currentFpInd < fileCnt && ( kseq_read( inSeq ) < 0 ) )
       {
+        if (addSpecialReadForFileEnd)
+        {
+          if (fileEndSpecialReadFlag == 0)
+          {
+            if ( *id != NULL )	
+              free( *id ) ; 
+            *id = strdup(specialReadId.c_str()) ;
+            if (*seq != NULL)
+              (*seq)[0] = '\0' ;
+            else
+              *seq = strdup("") ;
+            fileEndSpecialReadFlag = 1 ;
+            return 1 ;
+          }
+          else
+            fileEndSpecialReadFlag = 0 ;
+        }
+
         ++currentFpInd ;
         if (currentFpInd < fileCnt)
           OpenFile(currentFpInd) ;

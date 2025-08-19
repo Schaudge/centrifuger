@@ -34,7 +34,6 @@ enum
     RANK_PHYLUM,
     RANK_KINGDOM,
     RANK_DOMAIN,
-    RANK_ACELLULAR_ROOT,
     RANK_FORMA,
     RANK_INFRA_CLASS,
     RANK_INFRA_ORDER,
@@ -55,6 +54,7 @@ enum
     RANK_TRIBE,
     RANK_VARIETAS,
     RANK_LIFE,
+    RANK_ACELLULAR_ROOT, // New taxonomy rank IDs should be added to the end of the list to make sure backward compatbility
     RANK_MAX
 };
 
@@ -156,7 +156,7 @@ private:
         }
 
         if(tree.find(tid) != tree.end()) {
-          std::cerr << "Warning: " << tid << " already has a parent!" << std::endl;
+          std::cerr << "WARNING: " << tid << " already has a parent!" << std::endl;
           continue;
         }
         //std::cout<<rank_string<<" | "<< (int)GetTaxRankId(rank_string.c_str()) <<std::endl;
@@ -173,7 +173,7 @@ private:
     for (std::map<uint64_t, int>::iterator iter = presentTax.begin() ; iter != presentTax.end(); ++iter)
     {
       if (tree.find(iter->first) ==tree.end()) {
-        std::cerr << "Warning: " << iter->first << " is not in the taxonomy tree" << std::endl;
+        std::cerr << "WARNING: " << iter->first << " is not in the taxonomy tree" << std::endl;
         continue;
       }
       uint64_t p = iter->first ;
@@ -355,6 +355,7 @@ private:
     }
     _seqCnt = _seqStrNameMap.GetSize() ;
   }
+
 
   // Whether b is next to a in accession id
   bool IsNextSeqName(const char *a, const char *b)
@@ -709,7 +710,8 @@ public:
   }
 
   // Promote the tax id to higher level until number of taxids <= k, or reach LCA 
-  void ReduceTaxIds(const SimpleVector<size_t> &taxIds, SimpleVector<size_t> &promotedTaxIds, int k)
+  void ReduceTaxIds(const SimpleVector<size_t> &taxIds, SimpleVector<size_t> &promotedTaxIds, int k,
+      std::vector< std::vector<size_t> > *promotedChildTaxIds)
   {
     int i ;
     int taxCnt = taxIds.Size() ;
@@ -722,13 +724,33 @@ public:
     }
 
     // If there is a tax id not in the tree, we 
-    //   give it no rank directly.
+    //   give it no rank or root directly.
     for (i = 0 ; i < taxCnt ; ++i)
+    {
+      bool flag = false ;
       if (taxIds[i] >= _nodeCnt)
       {
         promotedTaxIds.PushBack(_nodeCnt) ;
+        flag = true ;
+      }
+      /*if (taxIds[i] == _rootCTaxId) // root case, seems ignoring this is better.
+      {
+        promotedTaxIds.PushBack(_rootCTaxId) ;
+        flag = true ;
+      }*/
+
+      if (flag == true)
+      {
+        if (promotedChildTaxIds != NULL)
+        {
+          promotedChildTaxIds->push_back( std::vector<size_t>() ) ;
+          int j ;
+          for (j = 0 ; j < taxCnt ; ++j)
+            promotedChildTaxIds->at(0).push_back(taxIds[j]) ;
+        }
         return ;
       }
+    }
     // For each tax level, collect the found tax id on this level 
     std::map<size_t, int> taxIdsInRankNum[RANK_MAX] ;
     for (i = 0 ; i < taxCnt ; ++i)
@@ -766,8 +788,45 @@ public:
     for (std::map<size_t, int>::iterator iter = taxIdsInRankNum[ri].begin() ;
         iter != taxIdsInRankNum[ri].end() ; ++iter)
       promotedTaxIds.PushBack(iter->first) ;
+
     if (promotedTaxIds.Size() == 0)
       promotedTaxIds.PushBack(_rootCTaxId) ;
+    else if (promotedChildTaxIds != NULL && ri > 0) 
+    {
+      // Obtain the information that 
+      int size = promotedTaxIds.Size() ;
+      std::map<size_t, int> promotedTaxIdIdx ; // The index in the returned promotedTaxIds
+      for (i = 0 ; i < size ; ++i)
+      {
+        int k = 0 ;
+        for (std::map<size_t, int>::iterator iter = taxIdsInRankNum[ri].begin() ;
+            iter != taxIdsInRankNum[ri].end() ; ++iter, ++k)
+          promotedTaxIdIdx[iter->first] = k ;
+        promotedChildTaxIds->push_back( std::vector<size_t>() ) ;
+      }
+
+      for (std::map<size_t, int>::iterator iter = taxIdsInRankNum[ri - 1].begin() ;
+          iter != taxIdsInRankNum[ri - 1].end() ; ++iter)
+      {
+        size_t t = iter->first ;
+        while (t != _taxonomyTree[t].parentTid)
+        {
+          t = _taxonomyTree[t].parentTid ;
+          if (_taxRankNum[ _taxonomyTree[t].rank ] > ri)
+            break ;
+          else if (_taxRankNum[ _taxonomyTree[t].rank ] == ri)
+          {
+            // In case (somehow) the parent is not in the end result
+            if (promotedTaxIdIdx.find(t) != promotedTaxIdIdx.end())
+            {
+              int k = promotedTaxIdIdx[t] ;
+              promotedChildTaxIds->at(k).push_back(iter->first) ;
+            }
+            break ;
+          }
+        }
+      } // end- for iter 
+    } // end- if create child tax ids
   }
 
   // Get the taxonomy lineage for the tax IDs
@@ -1009,7 +1068,30 @@ public:
     free(taxidNewLength) ;
     free(preset) ;
   }
+  
+  // Use taxonomy ID to represent the seqIDs
+  // This function has to be called after the Init
+  void SetTaxIdAsSeqId()
+  {
+    size_t i ;
 
+    delete[] _seqIdToTaxId ;
+    _seqCnt = 0 ;
+    _seqStrNameMap.Clear() ;  
+  
+    _seqIdToTaxId = new uint64_t[_nodeCnt + 1] ; // + 1 to handle the case seqId not in the taxonomy tree
+    for (i = 0 ; i <= _nodeCnt ; ++i)
+    {
+      _seqIdToTaxId[i] = i ;
+      if (i < _nodeCnt)
+        _seqStrNameMap.Add(_taxonomyName[i]) ; 
+      else
+        _seqStrNameMap.Add("uncategorized") ;
+    }
+    _extraSeqCnt = 0 ;
+    _seqCnt = _nodeCnt + 1 ;
+  }
+  
   void Save(FILE *fp)
   {
     SAVE_VAR(fp, _nodeCnt) ;
@@ -1065,7 +1147,7 @@ public:
   {
     size_t i ;
     for (i = 0 ; i < _nodeCnt ; ++i)
-      printf("%lu\t|\t%lu\t|\t%s\n", 
+      printf("%lu\t|\t%lu\t|\t%s\t|\n", 
           GetOrigTaxId(i), GetOrigTaxId( _taxonomyTree[i].parentTid ), 
           GetTaxRankString(_taxonomyTree[i].rank)) ;
   }
@@ -1075,7 +1157,7 @@ public:
     size_t i ;
     for (i = 0 ; i < _nodeCnt ; ++i)
     {
-      printf("%lu\t|\t%s\t|\tscientific name\n", GetOrigTaxId(i), _taxonomyName[i].c_str()) ;
+      printf("%lu\t|\t%s\t|\tscientific name\t|\n", GetOrigTaxId(i), _taxonomyName[i].c_str()) ;
     }
   }
 
