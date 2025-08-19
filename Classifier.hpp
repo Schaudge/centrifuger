@@ -693,7 +693,7 @@ private:
         result.taxIds.emplace_back( _taxonomy.GetOrigTaxId(taxId) ) ;
         if (_param.outputExpandedResult)
         {
-          if ((int)expandedTaxIds.size() == size)
+          if ((int)expandedTaxIds.size() == bestSize)
           {
             // Taxonomy.hpp should include the sstream
             std::ostringstream streams ; 
@@ -844,7 +844,7 @@ public:
     result.Clear() ;
     uint32_t qualifiedRefSize = strlen(r1) ;
     if (r2 && strlen(r2) > qualifiedRefSize) qualifiedRefSize = strlen(r2) ;
-    result.queryLength += strlen(r1) ;
+    result.queryLength = strlen(r1) ;
     if (r2) result.queryLength += strlen(r2) ;
 
     SimpleVector<struct _BWTHit> hits ;
@@ -855,8 +855,6 @@ public:
         SearchForwardAndReverse(r1, r2, hits) ;
         GetClassificationFromHits(hits, result, qualifiedRefSize) ;
     }
-
-
 
   }
 
