@@ -17,13 +17,16 @@ struct _classifierParam {
   int maxResult ; // the number of entries in the results    
   int minHitLen ;
   int maxResultPerHitFactor ; // Get the SA/tax id for at most maxREsultPerHitsFactor * maxResult entries for each hit
+  bool outputExpandedResult ; // for each entry in the result, whether to output the children tax information. Might be useful for quantification 
   double minMatchFraction ;
   std::map<size_t, int> relatedTaxId ;
-  _classifierParam() {
+  _classifierParam()
+  {
     maxResult = 1 ;
     minHitLen = 13 ;
-    minMatchFraction = 0.5;
     maxResultPerHitFactor = 40 ;
+    outputExpandedResult = false ;
+    minMatchFraction = 0.5;
     relatedTaxId.clear() ;
   }
 } ;
@@ -37,12 +40,14 @@ struct _classifierResult {
   uint32_t queryLength ;
   std::vector<std::string> seqStrNames ; // sequence names 
   std::vector<uint64_t> taxIds ; // taxonomy ids (original, not compacted)
+  std::vector< std::string > expandedTaxIdStrings ; // the children taxonomy ids (orginal, not compacted) that result in the final taxIds. It's empty if the taxIds is sequence-level hit
 
   void Clear() {
     score = secondaryScore = relatedTaxId = 0 ;
     hitLength = queryLength = 0 ;
     seqStrNames.clear() ;
     taxIds.clear() ;
+    expandedTaxIdStrings.clear() ;
   }
 } ;
 
@@ -652,6 +657,10 @@ private:
            ++liftCnt;
         }
         result.taxIds.emplace_back( _taxonomy.GetOrigTaxId(taxId)) ;
+        if (_param.outputExpandedResult)
+        {
+          result.expandedTaxIdStrings.push_back( std::string("") ) ;
+        }
       }
     } else {
 
@@ -661,7 +670,10 @@ private:
         bestSeqTaxIds.PushBack( _taxonomy.SeqIdToTaxId(bestSeqIds[i]) ) ;
 
       SimpleVector<size_t> taxIds ;
-      _taxonomy.ReduceTaxIds(bestSeqTaxIds, taxIds, _param.maxResult) ;
+      std::vector< std::vector<size_t> > expandedTaxIds ;
+      _taxonomy.ReduceTaxIds(bestSeqTaxIds, taxIds, _param.maxResult, 
+          _param.outputExpandedResult ? &expandedTaxIds : NULL) ;
+
       // Centrifuge will promote to canonical tax levels here. 
       //   Maybe we will do the same in some future version.
       //_taxonomy.PromoteToCanonicalTaxRank(taxIds, /*dedup=*/true) ;
@@ -670,7 +682,7 @@ private:
       for (i = 0 ; i < bestSize ; ++i) {
         std::string rankName(_taxonomy.GetTaxRankString( _taxonomy.GetTaxIdRank(taxIds[i])) ) ;
         result.seqStrNames.emplace_back( rankName ) ;
-          liftCnt = 0; taxId = taxIds[i];
+        liftCnt = 0; taxId = taxIds[i];
         while (liftCnt < 4 && _taxonomy.GetTaxIdRank(taxId) != RANK_SPECIES) {
            taxId = _taxonomy.GetParentTid(taxId);
            ++liftCnt;
@@ -679,6 +691,25 @@ private:
            taxId = taxIds[i];
         }
         result.taxIds.emplace_back( _taxonomy.GetOrigTaxId(taxId) ) ;
+        if (_param.outputExpandedResult)
+        {
+          if ((int)expandedTaxIds.size() == size)
+          {
+            // Taxonomy.hpp should include the sstream
+            std::ostringstream streams ; 
+            int j ;
+            int expandedTaxIdsSize = expandedTaxIds[i].size() ;
+            for (j = 0 ; j < expandedTaxIdsSize ; ++j)
+            {
+              if (j != 0)
+                streams << "," ;
+              streams << _taxonomy.GetOrigTaxId(expandedTaxIds[i][j]) ;
+            }
+            result.expandedTaxIdStrings.push_back(streams.str()) ;
+          }
+          else
+            result.expandedTaxIdStrings.push_back(std::string("")) ;
+        }
       }
     }
     return result.taxIds.size() ;
