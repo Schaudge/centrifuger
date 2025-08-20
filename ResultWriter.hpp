@@ -12,6 +12,7 @@ class ResultWriter
 {
 private:
   FILE *_fpClassification ;
+  bool _excellentMatch ;
   bool _hasBarcode ;
   bool _hasUmi ;
   bool _outputUnclassified ;
@@ -183,10 +184,18 @@ public:
     _hasUmi = s ;
   }
 
+  void SetExcellentMatch(bool s)
+  {
+    _excellentMatch = s ;
+  }
+
   void OutputHeader()
   {
-    fprintf(_fpClassification, "readID\tseqID\ttaxID\trelatedTaxID\tscore\t2ndBestScore\thitLength\tqueryLength\tnumMatches") ;
-  
+    if (_excellentMatch)
+      fprintf(_fpClassification, "readID\thitLength\tqueryLength\tr1Hits\tr2Hits\tr1Seq\tr2Seq") ;
+    else
+      fprintf(_fpClassification, "readID\tseqID\ttaxID\trelatedTaxID\tscore\t2ndBestScore\thitLength\tqueryLength\tnumMatches") ;
+
     if (_hasBarcode)
       fprintf(_fpClassification, "\tbarcode") ;
     if (_hasUmi)
@@ -207,17 +216,16 @@ public:
       return ;
     }
 
-    int i ;
-    int matchCnt = r.taxIds.size() ;
+    size_t matchCnt = r.taxIds.size() ;
     ++_totalCnt ;
     if (matchCnt > 0)
     {
       ++_classifiedCnt ;
       if (r.score > 0) {  // Centrifuger raw output
-          for (i = 0 ; i < matchCnt ; ++i)
+          for (auto i = 0; i < matchCnt ; ++i)
           {
               fprintf(_fpClassification,
-                      "%s\t%s\t%lu\t%lu\t%lu\t%lu\t%d\t%d\t%d",
+                      "%s\t%s\t%lu\t%lu\t%lu\t%lu\t%d\t%d\t%lu",
                       readid, r.seqStrNames[i].c_str(), r.taxIds[i], r.relatedTaxId,
                       r.score, r.secondaryScore, r.hitLength, r.queryLength, matchCnt) ;
               if (_hasBarcode)
@@ -229,14 +237,31 @@ public:
               fprintf(_fpClassification, "\n") ;
           }
       } else {
-          fprintf(_fpClassification,"%s\t%d\t%d", readid, r.hitLength, r.queryLength) ;
-          fprintf(_fpClassification, "\t%lu,%s", r.taxIds[0], r.seqStrNames[0].c_str()) ;
-          for (i = 1 ; i < matchCnt ; ++i)
-              fprintf(_fpClassification, "|%lu,%s", r.taxIds[i], r.seqStrNames[i].c_str()) ;
+          bool pairBeWritten = false ;
+          fprintf(_fpClassification,"%s\t%d\t%d\t", readid, r.hitLength, r.queryLength) ;
+          if (r.taxIds[0] == 0) {
+              fprintf(_fpClassification, ",\t") ;
+              pairBeWritten = true ;
+          } else
+              fprintf(_fpClassification, "%lu,%s", r.taxIds[0], r.seqStrNames[0].c_str()) ;
+          for (auto i = 1; i < matchCnt ; ++i) {
+              if (!pairBeWritten && r.taxIds[i] == 0) {
+                  i += 1 ;
+                  fprintf(_fpClassification, "\t%lu,%s", r.taxIds[i], r.seqStrNames[i].c_str()) ;
+                  pairBeWritten = true;
+              } else {
+                  fprintf(_fpClassification, "|%lu,%s", r.taxIds[i], r.seqStrNames[i].c_str()) ;
+              }
+          }
+          if (!pairBeWritten)
+              fprintf(_fpClassification, "\t,") ;
+          fprintf(_fpClassification, "\t%s", r.r1_seq) ;
+          if (r.r2_seq)
+              fprintf(_fpClassification, "\t%s", r.r2_seq) ;
           fprintf(_fpClassification, "\n") ;
       }
     }
-    else
+    else if (_outputUnclassified)
     {
       fprintf(_fpClassification,
           "%s\tunclassified\t0\t0\t0\t0\t%d\t1", readid, r.queryLength) ;
@@ -249,7 +274,7 @@ public:
       fprintf(_fpClassification, "\n") ;
     }
 
-    for (i = 0 ; i <= 1 ; ++i)
+    for (auto i = 0 ; i <= 1 ; ++i)
     {
       gzFile *gzFps = NULL ;
       if ( i == 0 && matchCnt == 0 && _outputUnclassified)

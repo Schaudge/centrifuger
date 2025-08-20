@@ -38,13 +38,16 @@ struct _classifierResult {
   size_t relatedTaxId ;
   uint32_t hitLength ;
   uint32_t queryLength ;
-  std::vector<std::string> seqStrNames ; // sequence names 
+  char * r1_seq ;
+  char * r2_seq ;
+  std::vector<std::string> seqStrNames ; // sequence names
   std::vector<uint64_t> taxIds ; // taxonomy ids (original, not compacted)
   std::vector< std::string > expandedTaxIdStrings ; // the children taxonomy ids (orginal, not compacted) that result in the final taxIds. It's empty if the taxIds is sequence-level hit
 
   void Clear() {
     score = secondaryScore = relatedTaxId = 0 ;
     hitLength = queryLength = 0 ;
+    r1_seq = r2_seq = nullptr ;
     seqStrNames.clear() ;
     taxIds.clear() ;
     expandedTaxIdStrings.clear() ;
@@ -449,47 +452,49 @@ private:
     return hits.Size() ;
   }
 
-    //@return: the size of the excellent hits
-    size_t excellentMatchSearch(char *r1, char *r2, SimpleVector<struct _BWTHit> &hits) {
-        size_t r1len = strlen(r1) ;
-        char *rcR1 = strdup(r1) ;
-        ReverseComplement(rcR1, r1len) ;
+  //@return: the size of the excellent hits
+  size_t excellentMatchSearch(char *r1, char *r2, SimpleVector<struct _BWTHit> &hits) {
+      size_t r1len = strlen(r1) ;
+      char *rcR1 = strdup(r1) ;
+      ReverseComplement(rcR1, r1len) ;
 
-        size_t hit1 = 0, rcHit1 = 0 ;
-        SimpleVector<struct _BWTHit> eachHits[2] ;  // 0: first end, 1: second (mate) end
-        for (int shrinkage = 0 ;  shrinkage < 3 ; ++shrinkage) {  // TODO: more optimal guarantee ?
-            hit1 = ExcellentHitsFromRead(r1, r1len, shrinkage, eachHits[0]) ;
-            rcHit1 = ExcellentHitsFromRead(rcR1, r1len, shrinkage, eachHits[0]) ;
-            if (hit1 || rcHit1) break ;
-        }
+      size_t hit1 = 0, rcHit1 = 0 ;
+      struct _BWTHit blankHit(0, 0, 0, 0, 0) ;
+      SimpleVector<struct _BWTHit> eachHits[2] ;  // 0: first end, 1: second (mate) end
+      for (int shrinkage = 0 ;  shrinkage < 3 ; ++shrinkage) {  // TODO: more optimal guarantee ?
+          hit1 = ExcellentHitsFromRead(r1, r1len, shrinkage, eachHits[0]) ;
+          rcHit1 = ExcellentHitsFromRead(rcR1, r1len, shrinkage, eachHits[0]) ;
+          if (hit1 || rcHit1) break ;
+      }
 
-        if (r2 && (hit1 || rcHit1) && strcmp(rcR1, r2) == 0) {  // mate pair is same
-            hits.PushBack(eachHits[0]) ;
-        } else if (r2 && (hit1 || rcHit1)) {
-            char *rcR2 = strdup(r2) ;
-            size_t r2len = strlen(r2) ;
-            ReverseComplement(rcR2, r2len) ;
-            size_t hit2 = 0, rcHit2 = 0 ;
-            for (int shrinkage = 0 ;  shrinkage < 3 ; ++shrinkage) {
-                if (rcHit1)
-                    hit2 = ExcellentHitsFromRead(r2, r2len, shrinkage, eachHits[1]) ;
-                if (hit1)
-                    rcHit2 = ExcellentHitsFromRead(rcR2, r2len, shrinkage, eachHits[1]) ;
-                if (hit2 || rcHit2) break ;
-            }
-            free(rcR2) ;
+      if (r2 && (hit1 || rcHit1) && strcmp(rcR1, r2) == 0) {  // mate pair is same
+          hits.PushBack(blankHit) ;
+          hits.PushBack(eachHits[0]) ;
+      } else if (r2) {
+          char *rcR2 = strdup(r2) ;
+          size_t r2len = strlen(r2) ;
+          ReverseComplement(rcR2, r2len) ;
+          size_t hit2 = 0, rcHit2 = 0 ;
+          for (int shrinkage = 0 ;  shrinkage < 3 ; ++shrinkage) {
+              if (rcHit1)
+                  hit2 = ExcellentHitsFromRead(r2, r2len, shrinkage, eachHits[1]) ;
+              if (hit1)
+                  rcHit2 = ExcellentHitsFromRead(rcR2, r2len, shrinkage, eachHits[1]) ;
+              if (hit2 || rcHit2) break ;
+          }
+          free(rcR2) ;
 
-            if (eachHits[0].Size() > 0 && eachHits[1].Size() > 0) {
-                hits = eachHits[0] ;
-                hits.PushBack(eachHits[1]) ;
-            }
-        } else if (hit1 || rcHit1) {
-            hits = eachHits[0] ;
-        }
+          if (hit2 || rcHit2) eachHits[0].PushBack(blankHit) ;
+          hits = eachHits[0] ;
+          if (hit2 || rcHit2) hits.PushBack(eachHits[1]) ;
 
-        free(rcR1) ;
-        return hits.Size() ;
-    }
+      } else if (hit1 || rcHit1) {
+          hits = eachHits[0] ;
+      }
+
+      free(rcR1) ;
+      return hits.Size() ;
+  }
 
   size_t GetClassificationFromHits(const SimpleVector<struct _BWTHit> &hits, struct _classifierResult &result, uint32_t maxReadLength) {
     int i, k ;
@@ -720,9 +725,20 @@ private:
         size_t j ;
         int hitCnt = hits.Size() ;
         const size_t maxEntries = _param.maxResult * _param.maxResultPerHitFactor ;
-        std::map<size_t, int> localSeqIdHit ;
+        std::map<size_t, int> interpolatedSeqIdCount ;
 
         for (i = 0 ; i < hitCnt ; ++i) {
+
+            if (hits[i].ep == 0 && hits[i].l == 0) {  // hits break flag for paired-end hits
+                for (auto & iter : interpolatedSeqIdCount) {
+                    result.taxIds.emplace_back( iter.first ) ;
+                    result.seqStrNames.emplace_back( std::to_string(iter.second) ) ;  // ref hits count
+                }
+                result.taxIds.emplace_back(0) ;
+                result.seqStrNames.emplace_back("") ;
+                interpolatedSeqIdCount.clear() ;
+                continue;
+            }
             result.hitLength += hits[i].l ;
 
             if (hits[i].ep - hits[i].sp + 1 <= maxEntries) {
@@ -731,7 +747,7 @@ private:
 #ifdef LI_DEBUG
                     printf("%lu\n", _taxonomy.GetOrigTaxId( _taxonomy.SeqIdToTaxId(seqId) )) ;
 #endif
-                    localSeqIdHit[seqId] += 1 ;
+                    interpolatedSeqIdCount[_taxonomy.GetOrigTaxId(_taxonomy.SeqIdToTaxId(seqId))] += 1 ;
                 }
             } else {
                 // Since the first entry and last entry are likely to be more different
@@ -745,7 +761,7 @@ private:
 #ifdef LI_DEBUG
                     printf("%lu\n", _taxonomy.GetOrigTaxId( _taxonomy.SeqIdToTaxId(seqId) )) ;
 #endif
-                    localSeqIdHit[seqId] += 1 ;
+                    interpolatedSeqIdCount[_taxonomy.GetOrigTaxId(_taxonomy.SeqIdToTaxId(seqId))] += 1 ;
                     ++resolvedCnt ;
                 }
 
@@ -754,7 +770,7 @@ private:
 #ifdef LI_DEBUG
                     printf("%lu\n", _taxonomy.GetOrigTaxId( _taxonomy.SeqIdToTaxId(seqId) )) ;
 #endif
-                    localSeqIdHit[seqId] += 1 ;
+                    interpolatedSeqIdCount[_taxonomy.GetOrigTaxId(_taxonomy.SeqIdToTaxId(seqId))] += 1 ;
                     ++resolvedCnt ;
                     if (resolvedCnt >= maxEntries)
                         break ;
@@ -762,9 +778,9 @@ private:
             }
         }
 
-        for (auto & iter : localSeqIdHit) {
-            result.seqStrNames.emplace_back( std::to_string(iter.second) ) ;
-            result.taxIds.emplace_back( _taxonomy.GetOrigTaxId(_taxonomy.SeqIdToTaxId(iter.first)) ) ;
+        for (auto & iter : interpolatedSeqIdCount) {
+            result.taxIds.emplace_back( iter.first ) ;
+            result.seqStrNames.emplace_back( std::to_string(iter.second) ) ;  // ref hits count
         }
 
         return result.taxIds.size() ;
@@ -842,10 +858,14 @@ public:
   // Main function to return the classification results 
   void Query(char *r1, char *r2, struct _classifierResult &result) {
     result.Clear() ;
+    result.r1_seq = r1 ;
     uint32_t qualifiedRefSize = strlen(r1) ;
     if (r2 && strlen(r2) > qualifiedRefSize) qualifiedRefSize = strlen(r2) ;
     result.queryLength = strlen(r1) ;
-    if (r2) result.queryLength += strlen(r2) ;
+    if (r2) {
+        result.queryLength += strlen(r2) ;
+        result.r2_seq = r2 ;
+    }
 
     SimpleVector<struct _BWTHit> hits ;
     if (_param.minMatchFraction > 1) {

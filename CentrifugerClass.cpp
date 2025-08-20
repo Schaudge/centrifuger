@@ -527,6 +527,7 @@ int main(int argc, char *argv[])
   if (classifierParam.outputExpandedResult)
     resWriter.SetOutputExpandedTaxIds(true) ;
 
+  resWriter.SetExcellentMatch(classifierParam.minMatchFraction > 1) ;
   resWriter.SetHasBarcode(hasBarcode) ;
   resWriter.SetHasUmi(hasUmi) ;
   if (unclassifiedOutputPrefix[0] != '\0')
