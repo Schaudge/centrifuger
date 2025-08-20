@@ -859,13 +859,13 @@ public:
   void Query(char *r1, char *r2, struct _classifierResult &result) {
     result.Clear() ;
     result.r1_seq = r1 ;
-    uint32_t qualifiedRefSize = strlen(r1) ;
-    if (r2 && strlen(r2) > qualifiedRefSize) qualifiedRefSize = strlen(r2) ;
     result.queryLength = strlen(r1) ;
     if (r2) {
-        result.queryLength += strlen(r2) ;
-        result.r2_seq = r2 ;
+      result.queryLength += strlen(r2) ;
+      result.r2_seq = r2 ;
     }
+    uint32_t qualifiedRefSize = strlen(r1) ;
+    if (r2 && strlen(r2) > qualifiedRefSize) qualifiedRefSize = strlen(r2) ;
 
     SimpleVector<struct _BWTHit> hits ;
     if (_param.minMatchFraction > 1) {
