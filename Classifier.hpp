@@ -468,6 +468,7 @@ private:
       }
 
       if (r2 && (hit1 || rcHit1) && strcmp(rcR1, r2) == 0) {  // mate pair is same
+          hits = eachHits[0] ;
           hits.PushBack(blankHit) ;
           hits.PushBack(eachHits[0]) ;
       } else if (r2) {
