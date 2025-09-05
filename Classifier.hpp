@@ -14,7 +14,7 @@ using namespace compactds ;
 //#define LI_DEBUG
 
 struct _classifierParam {
-  int maxResult ; // the number of entries in the results    
+  int maxResult ; // the number of entries in the results
   int minHitLen ;
   int maxResultPerHitFactor ; // Get the SA/tax id for at most maxREsultPerHitsFactor * maxResult entries for each hit
   bool outputExpandedResult ; // for each entry in the result, whether to output the children tax information. Might be useful for quantification 
@@ -191,7 +191,7 @@ private:
                           size_t _backwardMatchLen = breaks[_si].len ;
                           size_t skip = breaks[_si].skip + (shift < 3 ? shift : 0) ;
                           size_t _pos = end - _backwardMatchLen - skip ;
-                          if (shift > 2 && base > '@' || (shift == 2 && base == r[_pos]) || (shift < 2 && base > '@' && base != r[_pos])) {
+                          if ((shift > 2 && base > '@') || (shift == 2 && base == r[_pos]) || (shift < 2 && base > '@' && base != r[_pos])) {
                               size_t _sp = breaks[_si].sp, _ep = breaks[_si].ep ;
                               if (_fm.BackwardOneBaseExtend(base, _sp, _ep) > 0) {
                                   _backwardMatchLen += _fm.PreRangeKeptBackwardSearch(r, _pos, _sp, _ep) ;
@@ -220,7 +220,7 @@ private:
                                   size_t _backwardMatchLen = _tr ;
                                   const size_t skip = breaks[_si].skip + (shift < 3 ? shift : 0) ;
                                   const size_t _pos = end - _tr - skip ;
-                                  if (shift > 2 && base > '@' || (shift == 2 && base == r[_pos]) || (shift < 2 && base > '@' && base != r[_pos])) {
+                                  if ((shift > 2 && base > '@') || (shift == 2 && base == r[_pos]) || (shift < 2 && base > '@' && base != r[_pos])) {
                                       size_t _sp = tr_sp, _ep = tr_ep ;
                                       if (_fm.BackwardOneBaseExtend(base, _sp, _ep) > 0) {
                                           _backwardMatchLen += _fm.PreRangeKeptBackwardSearch(r, _pos, _sp, _ep) ;
