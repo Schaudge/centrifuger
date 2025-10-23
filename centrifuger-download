@@ -27,7 +27,23 @@ map_headers_to_taxid() {
 }
 export -f map_headers_to_taxid
 
+flock_echo_e() {
+    if [[ $LOCK_FILE != "" ]]; then
+      flock -x $LOCK_FILE -c "echo -e $1"
+    else # this handles the single-thread case
+      echo -e $1
+    fi
+}
+export -f flock_echo_e
 
+flock_echo() {
+    if [[ $LOCK_FILE != "" ]]; then
+      flock -x $LOCK_FILE -c "echo $1"
+    else # this handles the single-thread case
+      echo $1
+    fi
+}
+export -f flock_echo
 
 #########################################################
 ## Functions
@@ -79,10 +95,10 @@ function download_n_process() {
       ## Output sequenceID to taxonomy ID map to STDOUT
       gzip -cd < $RES_FILE | map_headers_to_taxid $TAXID
     else
-      echo -e "$PWD/$RES_FILE\t$TAXID"
+      flock_echo_e "$PWD/$RES_FILE\t$TAXID"
     fi
 
-    echo done
+    flock_echo "done"
 }
 export -f download_n_process
 
@@ -236,7 +252,7 @@ elif [[ "$DL_PROG" == "wget" ]]; then
     DL_CMD="wget -N --reject=index.html -qO"
         DL_MODE="https"
 elif [[ "$DL_PROG" == "curl" ]]; then
-    DL_CMD="curl -s -o"
+    DL_CMD="curl --fail -s -o"
         DL_MODE="https"
 else
         echo "Unknown download program - please install one of rsync, wget or curl, and specify it with the -g option" >&2

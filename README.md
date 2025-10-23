@@ -44,6 +44,9 @@ Centrifuger is also available from [Bioconda](https://anaconda.org/bioconda/cent
         --dcv INT: difference cover period [4096]
         --offrate INT: SA/offset is sampled every (2^<int>) BWT chars [4]
         --subset-tax INT: only consider the subset of input genomes under taxonomy node <int> [0]
+        --concat-tax-genome: concatenate the genomes with the same taxID and discard the seqID information [not used]
+        --ignore-uncategorized-genome: ignore genomes whose seqID or taxID is missing or uncategorized. [include all]
+        --checkpoint: add checkpoint (files [output_prefix]_checkpoint.[123]) for resuming index construction. [not used]
 
 The default --bmax and --dcv option may be inefficient for building indexes for larger genome databases, please use --build-mem option to specify the rough estimation of the available memory.
 
@@ -51,10 +54,12 @@ Here is a list of pre-built indexes:
 
 | Title | Link | Size/~Memory | Date |
 |-------|------|------|------|
-| Refseq human, bacteria, archea, virus + SARS-CoV2-variants from GenBank | [Zenodo](https://zenodo.org/records/10023239) | 41G | 2023/10/1 |
+| Refseq human, bacteria, archea, virus + SARS-CoV2-variants from GenBank | [Zenodo](https://zenodo.org/records/10023239) | 41G | 2023/10/01 |
 | [GTDB r226](https://gtdb.ecogenomic.org/) | [Dropbox](https://www.dropbox.com/scl/fo/xjp5r81jxkzxest9ijxul/ADfYFKoxIyl0hrICeEI63QM?rlkey=5lij0ocrbre165pa52mavux5z&st=4ol28yv2&dl=0) | 164G | 2025/05/20 |
 | GTDB r226 + Refseq human, virus, fungi, and contaminant (UniVec,EmVec)| [Dropbox](https://www.dropbox.com/scl/fo/tkoge61zh199i9n2l7891/AL_8z4zzTm0tHvHJh8UrIdg?rlkey=3abt78pbbtn9v5w2ulz0nfjw2&st=m1ir66th&dl=0) | 166G | 2025/05/20 |
-| NCBI nt | [Dropbox](https://www.dropbox.com/scl/fo/dbjzuerib7nfluj2u3yw7/AER-MP9RaqL0g59YwTXe4RU?rlkey=7zy78nvwdw19fuaetnn3u7qhi&st=6un1f4ux&dl=0)  | 74G | 2018 |
+| NCBI core nt | [Dropbox](https://www.dropbox.com/scl/fo/f1mbf7nf893pisoruanb4/AHS06LaJr9EN0Pg7hbifWn8?rlkey=7fgtj6pi53l2iwrjw1k6xq8o8&st=yn57lnkh&dl=0)  | 212G | 2025/06/11 |
+
+(For the files on the Dropbox, you can right-click and "copy link" for each individual file and use "wget" on that link to download the file through the command line.)
 
 #### Classification
 
