@@ -209,7 +209,7 @@ private:
                       if (typeLevelControl) break;
                   }
                   // an excellent alignment may occur before the maximum exact match (MEM) break point
-                  if (hits.Size() < 1 && breaks[_si].len > 5 && mismatch + discard < 2) {
+                  if (hits.Size() < 1 && breaks[_si].len > 5 && mismatch + discard < 3) {   // 3 = 4 (the value in while loop) - 1, and 5 for a heuristically omitted search
                       size_t tr_sp = 1, tr_ep = 0 ;
                       _fm.SmallMatchedBackwardExtend(r, end - 1, end - 3, tr_sp, tr_ep) ;
                       for (int _tr = 3 ; _tr < breaks[_si].len ; ++_tr) {  // mem truncation
